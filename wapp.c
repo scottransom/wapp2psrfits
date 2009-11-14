@@ -236,67 +236,133 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     printf("bits_per_lag = %d\n", w->bits_per_lag);
     printf("corr_level = %d\n", w->corr_level);
     printf("invertband = %d\n", w->invertband);
-    printf("dt = %.10f\n", w->dt);
-    printf("BW = %f\n", w->BW);
-    printf("fctr = %f\n", w->fctr);
-    printf("df = %f\n", w->df);
-    printf("lofreq = %15.10f\n", w->lofreq);
-    printf("corr_scale = %f\n", w->corr_scale);
-    printf("ra = %15.10f\n", w->ra);
-    printf("dec = %15.10f\n", w->dec);
-    printf("MJD_epoch = %Lf\n", w->MJD_epoch);
+    printf("dt = %.10g\n", w->dt);
+    printf("BW = %.10g\n", w->BW);
+    printf("fctr = %.10g\n", w->fctr);
+    printf("df = %.10g\n", w->df);
+    printf("lofreq = %.10g\n", w->lofreq);
+    printf("corr_scale = %.10g\n", w->corr_scale);
+    printf("ra = %.10g\n", w->ra);
+    printf("dec = %.10g\n", w->dec);
+    printf("MJD_epoch = %20.15Lf\n", w->MJD_epoch);
 #endif
 }
+
+
+static int compare_wapp_files_basic(int filenum, struct wappinfo *w1, 
+                                    struct wappinfo *w2)
+{
+    int good=1;
+    
+    if (w2->numchans != w1->numchans) {
+        printf("Error:  Number of channels (%d vs %d) differs between files %d and 1!\n\n", 
+               w2->numchans, w1->numchans, filenum+1);
+        good = 0;
+    }
+    if (w2->numifs != w1->numifs) {
+        printf("Error:  Number of IFs (%d vs %d) differs between files %d and 1!\n\n", 
+               w2->numifs, w1->numifs, filenum+1);
+        good = 0;
+    }
+    if (w2->dt != w1->dt) {
+        printf("Error:  Sample time (%.4f vs %.4f) differs between files %d and 1!\n\n", 
+               w2->dt, w1->dt, filenum+1);
+        good = 0;
+    }
+    if (w2->df != w1->df) {
+        printf("Error:  Channel width (%.4f vs %.4f) differs between files %d and 1!\n\n", 
+               w2->df, w1->df, filenum+1);
+        good = 0;
+    }
+    return good;
+}
+
+static int compare_samewapp_files(int filenum, struct wappinfo *w1, 
+                                  struct wappinfo *w2)
+{
+    int good = compare_wapp_files_basic(filenum, w1, w2);
+    
+    if (w2->fctr != w1->fctr) {
+        printf("Error:  Center freq (%.4f vs %.4f) differs between files %d and 1!\n\n", 
+               w2->fctr, w1->fctr, filenum+1);
+        good = 0;
+    }
+    return good;
+}
+        
+
+static int compare_diffwapp_files(int filenum, int numwapps, int wappindex, 
+                                  struct wappinfo *w1, struct wappinfo *w2)
+{
+    int good = compare_wapp_files_basic(filenum, w1, w2);
+    double diff_BWs;
+    
+    if (filenum < numwapps) {
+        // Compare the starting epochs
+        if (fabs(w2->MJD_epoch - w1->MJD_epoch) * 86400.0 > 1.e-5) {
+            printf("Error:  Epoch (%20.15Lf vs %20.15Lf) differs between files %d and 1!\n\n", 
+                   w2->MJD_epoch, w1->MJD_epoch, filenum+1);
+            good = 0;
+        }
+    }
+    // Compare the center frequencies of the files
+    diff_BWs = fabs(w1->fctr - w2->fctr) / w1->BW;
+    if (fabs(diff_BWs - wappindex) > 1e-3) {
+        printf("Error:  Center freqs (%.2f MHz vs %.2f MHz) are not separated\n"
+               "        by the BW (%.2f MHz), in files %d and 1!\n\n", 
+               w2->fctr, w1->fctr, w1->BW, filenum+1);
+        good = 0;
+    }
+    return good;
+}
+        
 
 long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
                         struct HEADERP *h, struct wappinfo *w)
 {
-    int ii, jj;
+    int ii, wappindex;
     struct HEADERP *h2;
     struct wappinfo w2;
     long long N=0;
     
-    /* Read the header of the first file with the yacc/lex generated tools */
+    // Read the header of the first file with the yacc/lex generated tools
+    // This sets the basic parameters of the conversion
     h = head_parse(files[0]);
     set_wappinfo(h, w);
     close_parse(h);
-    
-    /* Skip the ASCII and binary headers of the first set of WAPP files */
-    for (ii = 0; ii < numwapps; ii++)
-        chkfseek(files[ii], w->header_size, SEEK_SET);
-    
     // Number of samples in the file
-    N = (chkfilelen(files[0], 1) - w->header_size) / w->bytes_per_sample;
+    w->numsamples = (chkfilelen(files[0], 1) - w->header_size) / 
+        w->bytes_per_sample;
+    // This will be the total number of samples to convert
+    N = w->numsamples;
 
-    // Now check the other files
-    for (ii = 1; ii < numfiles / numwapps; ii++) {
-
-        /* Read the header with the yacc/lex generated tools */
-        h2 = head_parse(files[ii*numwapps]);
-        set_wappinfo(h, &w2);
-
-        /* Skip the ASCII and binary headers of the other WAPP files */
-        for (jj = 0; jj < numwapps; jj++)
-            chkfseek(files[ii*numwapps+jj], w->header_size, SEEK_SET);
+    // Skip the ASCII and binary header
+    chkfseek(files[0], w->header_size, SEEK_SET);
+    
+    // loop through all the other files and check/prep them
+    for (ii = 1; ii < numfiles; ii++) {
+       
+        // Read the header with the yacc/lex generated tools
+        h2 = head_parse(files[ii]);
+        set_wappinfo(h2, &w2);
         close_parse(h2);
-
-        // Do a basic check to see if the files are similar
-        if (w2.numchans != w->numchans) {
-            printf("Number of channels (file %d) is not the same!\n\n", ii + 1);
-        }
-        if (w2.numifs != w->numifs) {
-            printf("Number of IFs (file %d) is not the same!\n\n", ii + 1);
-        }
-        if (w2.dt != w->dt) {
-            printf("Sample time (file %d) is not the same!\n\n", ii + 1);
-        }
-        if (w2.df != w->df) {
-            printf("Channel width (file %d) is not the same!\n\n", ii + 1);
-        }
-        
         // Number of samples in the file
-        N += (chkfilelen(files[ii*numwapps], 1) - 
-              w->header_size) / w->bytes_per_sample;
+        w2.numsamples = (chkfilelen(files[ii], 1) - w2.header_size) / 
+            w2.bytes_per_sample;
+        
+        // Skip the ASCII and binary header
+        chkfseek(files[ii], w2.header_size, SEEK_SET);
+        
+        // Do a basic check to see if the files are similar
+        wappindex = ii % numwapps;
+        if (wappindex == 0) { // Same WAPP
+            if (!compare_samewapp_files(ii, w, &w2)) 
+                exit(1);
+            N += w2.numsamples;
+        } else { // Different WAPPs
+            if (!compare_diffwapp_files(ii, numwapps, wappindex, w, &w2)) 
+                exit(1);
+        }
     }
     return N;
 }

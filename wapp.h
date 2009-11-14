@@ -8,6 +8,7 @@ struct wappinfo {
     int header_size;
     int numchans;
     int numifs;
+    int numsamples;
     int bits_per_lag;
     int bytes_per_sample;
     int corr_level;
