@@ -6,7 +6,7 @@ FFTWLIBDIR = /usr/local/lib
 FFTWLINK = -L$(FFTWLIBDIR) -lfftw3f
 
 # Source directory
-SRCDIR = /home/sransom/wapp2psrfits
+SRCDIR = $(shell pwd)
 
 # Which C compiler
 CC = gcc
