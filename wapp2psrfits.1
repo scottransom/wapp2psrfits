@@ -24,6 +24,7 @@ wapp2psrfits \- Converts search-mode WAPP data into PSRFITS
 .B wapp2psrfits
 [-n numwapps]
 [-b numbits]
+[-g outlenGB]
 -o outfile
 [-i]
 infiles ...
@@ -43,6 +44,12 @@ The number of bits in each output sample (4 or 8),
 1 Int value between 4 and 8.
 .br
 Default: `8'
+.IP -g
+Approx length in GB of output data files,
+.br
+1 Int value between 1 and 1000.
+.br
+Default: `10'
 .IP -o
 Name of the output psrfits file,
 .br

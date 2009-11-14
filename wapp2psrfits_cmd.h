@@ -17,6 +17,10 @@ typedef struct s_Cmdline {
   char numbitsP;
   int numbits;
   int numbitsC;
+  /***** -g: Approx length in GB of output data files */
+  char outlenGBP;
+  int outlenGB;
+  int outlenGBC;
   /***** -o: Name of the output psrfits file */
   char outfileP;
   char* outfile;
