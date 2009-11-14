@@ -5,12 +5,9 @@
 
 // The following is the max file length in GB, different for fold/search
 #define PSRFITS_MAXFILELEN_SEARCH 10L
-#define PSRFITS_MAXFILELEN_FOLD 1L
 
 // The following is the template file to use to create a PSRFITS file.
-// Path is relative to GUPPI_DIR environment variable.
-#define PSRFITS_SEARCH_TEMPLATE "src/guppi_PSRFITS_v3.4_search_template.txt"
-#define PSRFITS_FOLD_TEMPLATE "src/guppi_PSRFITS_v3.4_fold_template.txt"
+#define PSRFITS_SEARCH_TEMPLATE "WAPP_PSRFITS_v3.4_search_template.txt"
 
 struct hdrinfo {
     char obs_mode[8];       // Observing mode (SEARCH, PSR, CAL)
@@ -89,15 +86,6 @@ struct subint {
     unsigned char *data;    // Ptr to the raw data itself
 };
 
-#include "polyco_struct.h"
-struct foldinfo {
-    char parfile[256];      // Parfile name for folding
-    int n_polyco_sets;      // Number of polyco sets present
-    struct polyco *pc;      // Pointer to polyco blocks
-    int nbin;               // Requested number of bins
-    double tfold;           // Requested fold integration time
-};
-
 struct psrfits {
     char basefilename[200]; // The base filename from which to build the true filename
     char filename[200];     // Filename of the current PSRFITs file
@@ -114,24 +102,14 @@ struct psrfits {
     char mode;              // Read (r) or write (w).
     struct hdrinfo hdr;
     struct subint sub;
-    struct foldinfo fold;   
 };
 
 // In write_psrfits.c
 int psrfits_create(struct psrfits *pf);
 int psrfits_write_subint(struct psrfits *pf);
-int psrfits_write_polycos(struct psrfits *pf, struct polyco *pc, int npc);
-int psrfits_write_ephem(struct psrfits *pf, FILE *parfile);
 int psrfits_close(struct psrfits *pf);
 #define SEARCH_MODE 1
 #define FOLD_MODE 2
 int psrfits_obs_mode(const char *obs_mode);
-int psrfits_remove_polycos(struct psrfits *pf);
-int psrfits_remove_ephem(struct psrfits *pf);
-
-// In read_psrfits.c
-int psrfits_open(struct psrfits *pf);
-int psrfits_read_subint(struct psrfits *pf);
-int psrfits_read_part_DATA(struct psrfits *pf, int N, char *buffer);
 
 #endif

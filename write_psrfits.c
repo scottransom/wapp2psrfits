@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include "psrfits.h"
-#include "polyco.h"
 
 #define DEBUGOUT 0
 
@@ -31,11 +30,9 @@ int psrfits_create(struct psrfits *pf) {
     double dtmp;
     char ctmp[40];
     struct hdrinfo *hdr;
-    struct foldinfo *fld;
 
     hdr = &(pf->hdr);        // dereference the ptr to the header struct
     status = &(pf->status);  // dereference the ptr to the CFITSIO status
-    fld = &(pf->fold);       // ptr to foldinfo struct
 
     // Figure out what mode this is 
     int mode=0;
@@ -82,21 +79,11 @@ int psrfits_create(struct psrfits *pf) {
         sprintf(pf->filename, "%s_%04d.fits", pf->basefilename, pf->filenum);
 
     // Create basic FITS file from our template
-    // Fold mode template has additional tables (polyco, ephem)
-    char *guppi_dir = getenv("GUPPI_DIR");
     char template_file[1024];
-    if (guppi_dir==NULL) {
-        fprintf(stderr, 
-                "Error: GUPPI_DIR environment variable not set, exiting.\n");
-        exit(1);
-    }
     printf("Opening file '%s' ", pf->filename);
     if (mode==search) { 
         printf("in search mode.\n");
-        sprintf(template_file, "%s/%s", guppi_dir, PSRFITS_SEARCH_TEMPLATE);
-    } else if (mode==fold) { 
-        printf("in fold mode.\n");
-        sprintf(template_file, "%s/%s", guppi_dir, PSRFITS_FOLD_TEMPLATE);
+        sprintf(template_file, "%s/%s", SRCDIR, PSRFITS_SEARCH_TEMPLATE);
     }
     fits_create_template(&(pf->fptr), pf->filename, template_file, status);
 
@@ -177,35 +164,6 @@ int psrfits_create(struct psrfits *pf) {
     dtmp = (double) ldtmp;
     fits_update_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, status);
     fits_update_key(pf->fptr, TDOUBLE, "STT_LST", &(hdr->start_lst), NULL, status);
-
-    // If fold mode, copy the parfile into the PSRFITS EPHEM table
-    if (mode==fold) {
-        if (strcmp("CAL",hdr->obs_mode)==0) {
-            // CAL mode has no par file, or no par file given
-            psrfits_remove_ephem(pf);
-        } else if (fld->parfile[0]=='\0') {
-            // No par file given
-            fprintf(stderr, 
-                    "psrfits_create warning:  "
-                    "Fold mode selected, but no parfile given - "
-                    "EPHEM table will be removed.\n"
-                    );
-            psrfits_remove_ephem(pf);
-        } else {
-            FILE *parfile = fopen(fld->parfile, "r");
-            if (parfile==NULL) {
-                fprintf(stderr, 
-                        "psrfits_create warning:  "
-                        "Error opening parfile %s - "
-                        "EPHEM table will be removed.\n", fld->parfile
-                        );
-                psrfits_remove_ephem(pf);
-            } else {
-                psrfits_write_ephem(pf, parfile);
-                fclose(parfile);
-            }
-        }
-    }
 
     // Go to the SUBINT HDU
     fits_movnam_hdu(pf->fptr, BINARY_TBL, "SUBINT", 0, status);
@@ -383,279 +341,6 @@ int psrfits_write_subint(struct psrfits *pf) {
     return *status;
 }
 
-int psrfits_write_polycos(struct psrfits *pf, struct polyco *pc, int npc) {
-
-    // Usual setup
-    int *status = &(pf->status);
-
-    // If mode!=fold, exit?
-
-    // Save current HDU, move to polyco table
-    int hdu;
-    fits_get_hdu_num(pf->fptr, &hdu);
-    fits_movnam_hdu(pf->fptr, BINARY_TBL, "POLYCO", 0, status);
-
-    int itmp;
-    double dtmp;
-    char datestr[32], ctmp[32];
-    char *cptr;
-    fits_get_system_time(datestr, &itmp, status);
-    int i, col, n_written=0; 
-    long row;
-    fits_get_num_rows(pf->fptr, &row, status); // Start at end of table
-    for (i=0; i<npc; i++) {
-
-        // Only write polycos that were used
-        if (!pc[i].used) continue; 
-
-        // Go to next row (1-based index)
-        row++;
-
-        cptr = datestr;
-        fits_get_colnum(pf->fptr,CASEINSEN,"DATE_PRO",&col,status);
-        fits_write_col(pf->fptr,TSTRING,col,row,1,1,&cptr,status);
-
-        sprintf(ctmp, "11.005"); // Tempo version?
-        cptr = ctmp;
-        fits_get_colnum(pf->fptr,CASEINSEN,"POLYVER",&col,status);
-        fits_write_col(pf->fptr,TSTRING,col,row,1,1,&cptr,status);
-
-        fits_get_colnum(pf->fptr,CASEINSEN,"NSPAN",&col,status);
-        fits_write_col(pf->fptr,TINT,col,row,1,1,&(pc[i].nmin),status);
-
-        fits_get_colnum(pf->fptr,CASEINSEN,"NCOEF",&col,status);
-        fits_write_col(pf->fptr,TINT,col,row,1,1,&(pc[i].nc),status);
-
-        sprintf(ctmp,"%d", pc[i].nsite); // XXX convert to letter?
-        cptr = ctmp;
-        fits_get_colnum(pf->fptr,CASEINSEN,"NSITE",&col,status);
-        fits_write_col(pf->fptr,TSTRING,col,row,1,1,&cptr,status);
-
-        fits_get_colnum(pf->fptr,CASEINSEN,"REF_FREQ",&col,status);
-        fits_write_col(pf->fptr,TFLOAT,col,row,1,1,&(pc[i].rf),status);
-
-        // XXX needs to be accurate??
-        dtmp=0.0;
-        fits_get_colnum(pf->fptr,CASEINSEN,"PRED_PHS",&col,status);
-        fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dtmp,status);
-
-        dtmp = (double)pc[i].mjd + pc[i].fmjd;
-        fits_get_colnum(pf->fptr,CASEINSEN,"REF_MJD",&col,status);
-        fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dtmp,status);
-
-        fits_get_colnum(pf->fptr,CASEINSEN,"REF_PHS",&col,status);
-        fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&(pc[i].rphase),status);
-
-        fits_get_colnum(pf->fptr,CASEINSEN,"REF_F0",&col,status);
-        fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&(pc[i].f0),status);
-
-        // XXX don't parse this yet
-        dtmp=-6.0;
-        fits_get_colnum(pf->fptr,CASEINSEN,"LGFITERR",&col,status);
-        fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dtmp,status);
-
-        fits_get_colnum(pf->fptr,CASEINSEN,"COEFF",&col,status);
-        fits_write_col(pf->fptr,TDOUBLE,col,row,1,pc[i].nc,pc[i].c,status);
-
-        n_written++;
-    }
-
-    // Update polyco block count, only if new info was added
-    if (n_written) {
-        itmp = row;
-        fits_get_colnum(pf->fptr,CASEINSEN,"NPBLK",&col,status);
-        for (i=1; i<=row; i++) 
-            fits_write_col(pf->fptr,TINT,col,i,1,1,&itmp,status);
-    }
-
-    // Flush buffers (so files are valid as they are created)
-    fits_flush_file(pf->fptr, status);
-
-    // Go back to orig HDU
-    fits_movabs_hdu(pf->fptr, hdu, NULL, status);
-
-    return *status;
-}
-
-int psrfits_write_ephem(struct psrfits *pf, FILE *parfile) {
-    // Read a pulsar ephemeris (par file) and put it into
-    // the psrfits PSREPHEM table.  Only minimal checking
-    // is done.
-   
-    // Get status
-    int *status = &(pf->status);
-
-    // Save current HDU, move to psrephem table
-    int hdu;
-    fits_get_hdu_num(pf->fptr, &hdu);
-    fits_movnam_hdu(pf->fptr, BINARY_TBL, "PSREPHEM", 0, status);
-
-    // Loop over lines in par file
-    int row=1, col, dtype;
-    double dval;
-    int ival;
-    long double ldval;
-    char line[256], *ptr, *saveptr, *key, *val;
-    while (fgets(line, 256, parfile)!=NULL) {
-
-        // Convert tabs to spaces
-        while ((ptr=strchr(line,'\t'))!=NULL) { *ptr=' '; }
-
-        // strip leading whitespace
-        ptr = line;
-        while (*ptr==' ') { ptr++; }
-
-        // Identify comments or blank lines
-        if (line[0]=='\n' || line[0]=='#' || 
-                (line[0]=='C' && line[1]==' '))
-            continue;
-
-        // Split into key/val (ignore fit flag and error)
-        key = strtok_r(line,  " ", &saveptr);
-        val = strtok_r(NULL, " ", &saveptr);
-        if (key==NULL || val==NULL) continue; // TODO : complain?
-
-        // Deal with any special cases here
-        if (strncmp(key, "PSR", 3)==0)  {
-
-            // PSR(J) -> PSR_NAME
-            fits_get_colnum(pf->fptr,CASEINSEN,"PSR_NAME",&col,status);
-            fits_write_col(pf->fptr,TSTRING,col,row,1,1,&val,status);
-
-        } else if (strncmp(key, "RA", 2)==0) {
-
-            // RA -> RAJ
-            fits_get_colnum(pf->fptr,CASEINSEN,"RAJ",&col,status);
-            fits_write_col(pf->fptr,TSTRING,col,row,1,1,&val,status);
-
-        } else if (strncmp(key, "DEC", 3)==0) {
-
-            // DEC -> DECJ
-            fits_get_colnum(pf->fptr,CASEINSEN,"DECJ",&col,status);
-            fits_write_col(pf->fptr,TSTRING,col,row,1,1,&val,status);
-
-        } else if (key[0]=='E' && key[1]=='\0') {
-
-            // E -> ECC
-            dval = atof(val);
-            fits_get_colnum(pf->fptr,CASEINSEN,"ECC",&col,status);
-            fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dval,status);
-
-        } else if (strncmp(key, "F0", 2)==0) {
-
-            // F is converted to mHz and split into int/frac
-            ldval = strtold(val,NULL) * 1000.0; // Hz->mHz
-            ival = (int)ldval;
-            dval = ldval - (long double)ival;
-            fits_get_colnum(pf->fptr,CASEINSEN,"IF0",&col,status);
-            fits_write_col(pf->fptr,TINT,col,row,1,1,&ival,status);
-            fits_get_colnum(pf->fptr,CASEINSEN,"FF0",&col,status);
-            fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dval,status);
-
-        } else if (strncmp(key, "TZRMJD", 6)==0) {
-
-            // TZRMJD is split into int/frac
-            ldval = strtold(val,NULL);
-            ival = (int)ldval;
-            dval = ldval - (long double)ival;
-            fits_get_colnum(pf->fptr,CASEINSEN,"TZRIMJD",&col,status);
-            fits_write_col(pf->fptr,TINT,col,row,1,1,&ival,status);
-            fits_get_colnum(pf->fptr,CASEINSEN,"TZRFMJD",&col,status);
-            fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dval,status);
-
-        } else {
-
-            // Find column, skip/warn if this one isn't present
-            fits_get_colnum(pf->fptr,CASEINSEN,key,&col,status);
-            if (*status==COL_NOT_FOUND) {
-#if (DEBUGOUT)
-                fprintf(stderr, 
-                        "psrfits_write_epherm warning: Couldn't find keyword %s "
-                        "in ephemeris table.\n",
-                        key);
-#endif
-                *status=0;
-                continue;
-            }
-
-            // Need to convert string to appropriate column data type
-            // and then write it to the column.  These should all be
-            // either double int or string.
-            fits_get_coltype(pf->fptr,col,&dtype,NULL,NULL,status);
-            if (dtype==TDOUBLE || dtype==TFLOAT) { 
-                dval = atof(val);
-                fits_write_col(pf->fptr,TDOUBLE,col,row,1,1,&dval,status);
-            } else if (dtype==TINT || dtype==TLONG || dtype==TSHORT) {
-                ival = atoi(val);
-                fits_write_col(pf->fptr,TINT,col,row,1,1,&ival,status);
-            } else if (dtype==TSTRING) {
-                fits_write_col(pf->fptr,TSTRING,col,row,1,1,&val,status);
-            } else {
-                fprintf(stderr, "psrfits_write_ephem warning: "
-                        "Unhandled column datatype (key=%s)\n", key);
-                continue;
-            }
-        }
-
-        // sucess/failure
-        if (*status) {
-            fprintf(stderr, "psrfits_write_ephem failed: key=%s val=%s\n",
-                    key, val);
-            fits_report_error(stderr, *status);
-            *status=0;
-        } 
-#if 0  // DEBUG
-        else {
-            fprintf(stderr, "psrfits_write_ephem success: key=%s val=%s\n",
-                    key, val);
-        }
-#endif
-
-    }
-
-    // Go back to orig HDU
-    fits_movabs_hdu(pf->fptr, hdu, NULL, status);
-
-    return *status;
-}
-
-int psrfits_remove_polycos(struct psrfits *pf) {
-    // Delete the polyco table
-    
-    int *status = &(pf->status);
-
-    // Save current HDU, move to polyco table
-    int hdu;
-    fits_get_hdu_num(pf->fptr, &hdu);
-    fits_movnam_hdu(pf->fptr, BINARY_TBL, "POLYCO", 0, status);
-
-    // Delete it
-    fits_delete_hdu(pf->fptr, NULL, status);
-
-    // Go to the SUBINT HDU
-    fits_movnam_hdu(pf->fptr, BINARY_TBL, "SUBINT", 0, status);
-
-    return *status;
-}
-
-int psrfits_remove_ephem(struct psrfits *pf) {
-    // Delete the ephemeris table
-    
-    int *status = &(pf->status);
-
-    // Save current HDU, move to polyco table
-    int hdu;
-    fits_get_hdu_num(pf->fptr, &hdu);
-    fits_movnam_hdu(pf->fptr, BINARY_TBL, "PSREPHEM", 0, status);
-
-    // Delete it
-    fits_delete_hdu(pf->fptr, NULL, status);
-
-    // Go to the SUBINT HDU
-    fits_movnam_hdu(pf->fptr, BINARY_TBL, "SUBINT", 0, status);
-
-    return *status;
-}
 
 int psrfits_close(struct psrfits *pf) {
     if (!pf->status) {

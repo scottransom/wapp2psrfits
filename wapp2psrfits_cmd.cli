@@ -1,0 +1,24 @@
+# Admin data
+
+Name wapp2psrfits
+
+Usage "Converts search-mode WAPP data into PSRFITS"
+
+Version [exec date +%d%b%y]
+
+Commandline full_cmd_line
+
+# Options (in order you want them to appear)
+
+Int 	-n 	numwapps {The number of simultaneous WAPPs to combine} \
+			-r 1 4  -d 1
+Int 	-b 	numbits  {The number of bits in each output sample (4 or 8)} \
+			-r 4 8  -d 8
+String	-o	outfile {Name of the output psrfits file} \
+			-m
+Flag   	-i	invert	{Invert the band}
+
+# Rest of command line:
+
+Rest 		infiles {Input WAPP file names (in time/WAPP order)} \
+			-c 1 100
