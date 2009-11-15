@@ -5,8 +5,10 @@ FFTWLIBDIR = /usr/local/lib
 # How to link with the FFTW libs
 FFTWLINK = -L$(FFTWLIBDIR) -lfftw3f
 
-# Other link directory (for libsla, which is in PRESTO)
-OTHERLINK = -L$(PRESTO)/lib -lsla
+# Other include directory (for CFITSIO, libsla, which is in PRESTO)
+OTHERINCLUDE = 
+# Other link directory (for CFITSIO, libsla, which is in PRESTO)
+OTHERLINK = -L/usr/local/lib -lcfitsio -L$(PRESTO)/lib -lsla 
 
 # Source directory
 SRCDIR = $(shell pwd)
@@ -16,7 +18,7 @@ CC = gcc
 CFLAGS = -I$(FFTWINCDIR) -DSRCDIR=\"$(SRCDIR)\"\
 	-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64\
 	-g -Wall -W
-#	-O3 -Wall -W -fPIC
+#	-O3 -Wall -W
 CLINKFLAGS = $(CFLAGS)
 
 # When modifying the CLIG files, the is the location of the clig binary
@@ -26,8 +28,7 @@ CLIG = /usr/local/bin/clig
 	$(CLIG) -o $*_cmd -d $<
 
 OBJS = chkio.o vectors.o sla.o wapp.o\
-	wapp_head_parse.o wapp_y.tab.o
-# write_psrfits.o
+	wapp_head_parse.o wapp_y.tab.o write_psrfits.o
 
 wapp2psrfits: wapp2psrfits.o wapp2psrfits_cmd.o $(OBJS)
 	$(CC) $(CLINKFLAGS) -o $@ wapp2psrfits.o wapp2psrfits_cmd.o $(OBJS) $(FFTWLINK) $(OTHERLINK) -lm
