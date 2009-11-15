@@ -1,3 +1,4 @@
+#include "psrfits.h"
 #include "wapp_key.h"
 
 /* time between correlator dumps in us */
