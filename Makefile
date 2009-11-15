@@ -5,6 +5,9 @@ FFTWLIBDIR = /usr/local/lib
 # How to link with the FFTW libs
 FFTWLINK = -L$(FFTWLIBDIR) -lfftw3f
 
+# Other link directory (for libsla, which is in PRESTO)
+OTHERLINK = -L$(PRESTO)/lib -lsla
+
 # Source directory
 SRCDIR = $(shell pwd)
 
@@ -22,12 +25,12 @@ CLIG = /usr/local/bin/clig
 %_cmd.c : %_cmd.cli
 	$(CLIG) -o $*_cmd -d $<
 
-OBJS = cldj.o chkio.o vectors.o wapp.o wapp_head_parse.o\
-	wapp_y.tab.o
+OBJS = chkio.o vectors.o sla.o wapp.o\
+	wapp_head_parse.o wapp_y.tab.o
 # write_psrfits.o
 
 wapp2psrfits: wapp2psrfits.o wapp2psrfits_cmd.o $(OBJS)
-	$(CC) $(CLINKFLAGS) -o $@ wapp2psrfits.o wapp2psrfits_cmd.o $(OBJS) $(FFTWLINK) -lm
+	$(CC) $(CLINKFLAGS) -o $@ wapp2psrfits.o wapp2psrfits_cmd.o $(OBJS) $(FFTWLINK) $(OTHERLINK) -lm
 
 # Default indentation is K&R style with no-tabs,
 # an indentation level of 4, and a line-length of 85

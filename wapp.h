@@ -22,7 +22,11 @@ struct wappinfo {
     double ra;
     double dec;
     long double MJD_epoch;
+    char date_obs[80];
 };
 
 long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
                         struct HEADERP *h, struct wappinfo *w);
+
+void fill_psrfits_struct(int numwapps, struct HEADERP *h, 
+                         struct wappinfo *w, struct psrfits *pf);

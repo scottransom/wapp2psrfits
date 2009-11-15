@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 #endif
     
     printf("\n           WAPP to PSRFITs Conversion Code\n");
-    printf("              by S. Ransom & S. Chatterjee\n\n");
+    printf("            by S. Ransom & S. Chatterjee\n\n");
     
     // Open the input files
     printf("Reading input data from:\n");

@@ -4,8 +4,19 @@
 #include "chkio.h"
 #include "vectors.h"
 #include "wapp.h"
+#include "psrfits.h"
+#include "slalib.h"
 
-double slaCldj(int iy, int im, int id, int *j);
+#ifndef DEGTORAD
+#define DEGTORAD 0.017453292519943295769236907684886127134428718885417
+#endif
+#ifndef RADTODEG
+#define RADTODEG 57.29577951308232087679815481410517033240547246656
+#endif
+#ifndef SOL
+#define SOL 299792458.0
+#endif
+
 static double inv_cerf(double input);
 static void vanvleck3lev(float *rho, int npts);
 static void vanvleck9lev(float *rho, int npts);
@@ -102,17 +113,32 @@ int *get_hdr_int_arr(struct HEADERP *h, char *name, int *len)
     return iarr;
 }
 
-static long double UT_strings_to_MJD(char *obs_date, char *start_time)
+
+static long double UT_strings_to_MJD(char *obs_date, char *start_time, 
+                                     char *date_obs)
 {
    int year, month, day, hour, min, sec, err;
+   double dMJD;
    long double LMJD;
    
    sscanf(obs_date, "%4d%2d%2d", &year, &month, &day);
    sscanf(start_time, "%2d:%2d:%2d", &hour, &min, &sec);
-   LMJD = slaCldj(year, month, day, &err);
-   LMJD += (hour + (min + (sec / 60.0)) / 60.0) / 24.0;
+   sprintf(date_obs, "%04d-%02d-%02dT%02d:%02d:%06.3f",
+           year, month, day, hour, min, (double) sec);
+   slaCaldj(year, month, day, &dMJD, &err);
+   LMJD = dMJD + (hour + (min + (sec / 60.0)) / 60.0) / 24.0;
    return LMJD;
 }
+
+
+// Return the beam FWHM in degrees for obs_freq in MHz
+// and dish_diam in m
+static double beam_FWHM(double obs_freq, double dish_diam)
+{
+    double lambda = SOL/(obs_freq*1e6);
+    return 1.2 * lambda / dish_diam * RADTODEG;
+}
+
 
 static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
 {
@@ -224,7 +250,7 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
         char *cptr1, *cptr2;
         cptr1 = get_hdr_string(h, "obs_date", &len);
         cptr2 = get_hdr_string(h, "start_time", &len);
-        w->MJD_epoch = UT_strings_to_MJD(cptr1, cptr2);
+        w->MJD_epoch = UT_strings_to_MJD(cptr1, cptr2, w->date_obs);
     }
 
 
@@ -245,6 +271,7 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     printf("ra = %.10g\n", w->ra);
     printf("dec = %.10g\n", w->dec);
     printf("MJD_epoch = %20.15Lf\n", w->MJD_epoch);
+    printf("date_obs = '%s'\n", w->date_obs);
 #endif
 }
 
@@ -315,7 +342,140 @@ static int compare_diffwapp_files(int filenum, int numwapps, int wappindex,
     }
     return good;
 }
-        
+
+
+static void dec2hms(char *out, double in, int sflag) {
+    int sign = 1;
+    char *ptr = out;
+    int h, m;
+    double s;
+    if (in<0.0) { sign = -1; in = fabs(in); }
+    h = (int)in; in -= (double)h; in *= 60.0;
+    m = (int)in; in -= (double)m; in *= 60.0;
+    s = in;
+    if (sign==1 && sflag) { *ptr='+'; ptr++; }
+    else if (sign==-1) { *ptr='-'; ptr++; }
+    sprintf(ptr, "%2.2d:%2.2d:%07.4f", h, m, s);
+}
+
+
+void fill_psrfits_struct(int numwapps, struct HEADERP *h, 
+                         struct wappinfo *w, struct psrfits *pf)
+{
+    int slen, ii;
+    char *cptr;
+
+    pf->filenum = 0;  // Crucial for initialization
+    pf->hdr.nsblk = (int) (1.0/w->dt); // _might_ be a problem...
+
+    // Now set values for our hdrinfo structure
+    strcpy(pf->hdr.telescope, "Arecibo");
+    cptr = get_hdr_string(h, "obs_type", &slen);
+    if (!strncmp("PULSAR_SEARCH", cptr, slen)) {
+        strcpy(pf->hdr.obs_mode, "SEARCH");
+        printf("Error:  Wapp data is not in search format!\n\n");
+        exit(1);
+    }
+    strcpy(pf->hdr.backend, "WAPP");
+    cptr = get_hdr_string(h, "frontend", &slen);
+    strncpy(pf->hdr.frontend, cptr, slen);
+    cptr = get_hdr_string(h, "observers", &slen);
+    strncpy(pf->hdr.observer, cptr, slen);
+    cptr = get_hdr_string(h, "project_id", &slen);
+    strncpy(pf->hdr.project_id, cptr, slen);
+    cptr = get_hdr_string(h, "src_name", &slen);
+    strncpy(pf->hdr.source, cptr, slen);
+    strcpy(pf->hdr.date_obs, w->date_obs);
+    pf->hdr.scanlen = get_hdr_double(h, "obs_time");
+
+    strcpy(pf->hdr.poln_type, "LIN"); // set based on known receivers
+    if (get_hdr_int(h, "sum")) {
+        strcpy(pf->hdr.poln_order, "AA+BB");
+        pf->hdr.summed_polns = 1;
+    } else if (w->numifs==1) {
+        strcpy(pf->hdr.poln_order, "AA");
+        pf->hdr.summed_polns = 0;
+    }
+    strcpy(pf->hdr.track_mode, "TRACK");  // Potentially not-true?
+    strcpy(pf->hdr.cal_mode, "OFF");      // Potentially not-true?
+    strcpy(pf->hdr.feed_mode, "FA"); // check this...
+
+    if (get_hdr_int(h, "isalfa")) {
+        // TODO:
+        //   Need to set the beam number here...
+        //   Also should correct positions and paralactic angles etc...
+    }
+ 
+    pf->hdr.dt = w->dt;
+    pf->hdr.fctr = w->fctr;
+    pf->hdr.BW = w->BW;
+    pf->hdr.beam_FWHM = beam_FWHM(pf->hdr.fctr, 300.0);
+    pf->hdr.nchan = w->numchans;
+    pf->hdr.orig_nchan = w->numchans;
+    pf->hdr.orig_df = pf->hdr.df = pf->hdr.BW / pf->hdr.nchan;
+    pf->hdr.nbits = 8;  // This needs to be re-set by the command line option
+    pf->hdr.npol = w->numifs;
+    pf->hdr.MJD_epoch = w->MJD_epoch;
+    pf->hdr.start_day = (int) (w->MJD_epoch);
+    pf->hdr.start_sec = (w->MJD_epoch - pf->hdr.start_day) * 86400.0;
+    pf->hdr.scan_number = get_hdr_int(h, "scan_number");
+    pf->hdr.ra2000 = w->ra;
+    dec2hms(pf->hdr.ra_str, pf->hdr.ra2000/15.0, 0);
+    pf->hdr.dec2000 = w->dec;
+    dec2hms(pf->hdr.dec_str, pf->hdr.dec2000, 1);
+    pf->hdr.azimuth = get_hdr_double(h, "start_az");
+    pf->hdr.zenith_ang = get_hdr_double(h, "start_za");
+    pf->hdr.rcvr_polns = 2;
+    pf->hdr.offset_subint = 0;
+    pf->hdr.onlyI = 0;
+    pf->hdr.ds_time_fact = 0;
+    pf->hdr.ds_freq_fact = 0;
+    pf->hdr.chan_dm = 0.0;
+    pf->hdr.fd_hand = pf->hdr.be_phase = 0;  // This is almost certainly not correct
+    pf->hdr.fd_sang = pf->hdr.fd_xyph = 0.0; // This is almost certainly not correct
+    pf->hdr.feed_angle = 0.0;            // This is almost certainly not correct
+    pf->hdr.cal_freq = pf->hdr.cal_dcyc = pf->hdr.cal_phs = 0.0;  //  ditto
+
+    // Now set values for our subint structure
+    pf->sub.tel_az = get_hdr_double(h, "start_az");
+    pf->sub.tel_zen = get_hdr_double(h, "start_za");
+    pf->sub.lst = get_hdr_double(h, "start_lst");
+    pf->sub.tsubint = pf->hdr.nsblk * pf->hdr.dt;
+    pf->sub.ra = pf->hdr.ra2000;
+    pf->sub.dec = pf->hdr.dec2000;
+    pf->sub.offs = 0.5 * pf->sub.tsubint;
+    slaEqgal(pf->hdr.ra2000*DEGTORAD, pf->hdr.dec2000*DEGTORAD, 
+             &pf->sub.glon, &pf->sub.glat);
+    pf->sub.glon *= RADTODEG;
+    pf->sub.glat *= RADTODEG;
+    pf->sub.feed_ang = 0.0;  // These are wrong too...
+    pf->sub.pos_ang = 0.0;   // These are wrong too...
+    pf->sub.par_ang = 0.0;   // These are wrong too...
+    pf->sub.bytes_per_subint = (pf->hdr.nbits * pf->hdr.nchan * 
+                               pf->hdr.npol * pf->hdr.nsblk) / 8;
+    pf->sub.FITS_typecode = TBYTE;  // 11 = byte
+
+    // Create and initialize the subint arrays
+    pf->sub.dat_freqs = gen_fvect(pf->hdr.nchan * numwapps);
+    pf->sub.dat_weights = gen_fvect(pf->hdr.nchan * numwapps);
+    for (ii = 0 ; ii < pf->hdr.nchan * numwapps; ii++) {
+        pf->sub.dat_freqs[ii] = w->lofreq + ii * pf->hdr.df;
+        pf->sub.dat_weights[ii] = 1.0;
+    }
+
+    // The following need to be adjusted for 4-bit data at least...
+    pf->sub.dat_offsets = gen_fvect(pf->hdr.nchan * pf->hdr.npol * numwapps);
+    pf->sub.dat_scales = gen_fvect(pf->hdr.nchan * pf->hdr.npol * numwapps);
+    for (ii = 0 ; ii < pf->hdr.nchan * pf->hdr.npol * numwapps; ii++) {
+        pf->sub.dat_offsets[ii] = 0.0;
+        pf->sub.dat_scales[ii] = 1.0;
+    }
+ 
+    // This is the raw data block that will be updated 
+    // for each row of the PSRFITS file
+    pf->sub.data = gen_bvect(pf->sub.bytes_per_subint);
+}
+
 
 long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
                         struct HEADERP *h, struct wappinfo *w)
