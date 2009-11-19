@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     float *lags, *fspects;
     long long N=0;
     FILE **infiles;
-    struct HEADERP hdr;
+    struct HEADERP *hdr;
     struct wappinfo w;
     struct psrfits pf;
     Cmdline *cmd;
@@ -50,7 +50,8 @@ int main(int argc, char *argv[])
     printf("Found a total of %lld samples.\n", N);
                       
     // Prep the psrfits structure
-    fill_psrfits_struct(cmd->numwapps, &hdr, &w, &pf);
+    fill_psrfits_struct(cmd->numwapps, hdr, &w, &pf);
+    close_parse(hdr);
 
     // Create the arrays we will need
     fspects = gen_fvect(cmd->numwapps * w.numifs * w.numchans * pf.hdr.nsblk);

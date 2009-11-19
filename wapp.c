@@ -478,7 +478,7 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
 
 
 long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
-                        struct HEADERP *h, struct wappinfo *w)
+                        struct HEADERP **h, struct wappinfo *w)
 {
     int ii, wappindex;
     struct HEADERP *h2;
@@ -487,9 +487,8 @@ long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
     
     // Read the header of the first file with the yacc/lex generated tools
     // This sets the basic parameters of the conversion
-    h = head_parse(files[0]);
-    set_wappinfo(h, w);
-    close_parse(h);
+    *h = head_parse(files[0]);
+    set_wappinfo(*h, w);
     // Number of samples in the file
     w->numsamples = (chkfilelen(files[0], 1) - w->header_size) / 
         w->bytes_per_sample;

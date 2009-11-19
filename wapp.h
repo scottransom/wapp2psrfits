@@ -27,7 +27,7 @@ struct wappinfo {
 };
 
 long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
-                        struct HEADERP *h, struct wappinfo *w);
+                        struct HEADERP **h, struct wappinfo *w);
 
 void fill_psrfits_struct(int numwapps, struct HEADERP *h, 
                          struct wappinfo *w, struct psrfits *pf);
