@@ -371,8 +371,9 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
     // Now set values for our hdrinfo structure
     strcpy(pf->hdr.telescope, "Arecibo");
     cptr = get_hdr_string(h, "obs_type", &slen);
-    if (!strncmp("PULSAR_SEARCH", cptr, slen)) {
+    if (strncmp("PULSAR_SEARCH", cptr, slen)==0) {
         strcpy(pf->hdr.obs_mode, "SEARCH");
+    } else {
         printf("Error:  Wapp data is not in search format!\n\n");
         exit(1);
     }
