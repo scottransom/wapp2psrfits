@@ -429,8 +429,8 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
     pf->hdr.rcvr_polns = 2;
     pf->hdr.offset_subint = 0;
     pf->hdr.onlyI = 0;
-    pf->hdr.ds_time_fact = 0;
-    pf->hdr.ds_freq_fact = 0;
+    pf->hdr.ds_time_fact = 1;
+    pf->hdr.ds_freq_fact = 1;
     pf->hdr.chan_dm = 0.0;
     pf->hdr.fd_hand = pf->hdr.be_phase = 0;  // This is almost certainly not correct
     pf->hdr.fd_sang = pf->hdr.fd_xyph = 0.0; // This is almost certainly not correct
