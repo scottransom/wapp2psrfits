@@ -31,7 +31,10 @@ char *get_hdr_string(struct HEADERP *h, char *name, int *slen)
         exit(0);
     }
     cptr = (char *)val.value;
-    *slen = strlen(cptr);
+    // Is the following + 1 really correct?  I think it causes it
+    // to always include the null terminator... SMR
+    *slen = strlen(cptr) + 1;
+    // printf("'%s' = '%s' (%d chars)\n", name, cptr, *slen);
     return cptr;
 }
 
