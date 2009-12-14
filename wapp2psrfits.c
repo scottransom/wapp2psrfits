@@ -10,9 +10,10 @@
 
 int main(int argc, char *argv[])
 {
-    int numfiles, ii;
+    int numfiles, ii, numrows, rownum, spec_per_row, specnum, status;
     float *lags, *fspects;
     long long N=0;
+    unsigned char *rawdata;
     FILE **infiles;
     struct HEADERP *hdr;
     struct wappinfo w;
@@ -52,9 +53,18 @@ int main(int argc, char *argv[])
     // Prep the psrfits structure
     fill_psrfits_struct(cmd->numwapps, hdr, &w, &pf);
     close_parse(hdr);
+    spec_per_row = pf.hdr.nsblk;
+    numrows = N / spec_per_row;
+    pf.rows_per_file = numrows; // NOTE: this will make a _single_ file!  FIXME!
+    printf("PSRFITS will have %d samples per row and %d rows.\n", 
+           spec_per_row, numrows);
 
     // Create the arrays we will need
-    fspects = gen_fvect(cmd->numwapps * w.numifs * w.numchans * pf.hdr.nsblk);
+    //
+    // These are the raw lags for a single sample from all WAPPs
+    rawdata = gen_bvect(w.bytes_per_sample * cmd->numwapps);
+    // These are the floating-point converted spectra for a full row
+    fspects = gen_fvect(cmd->numwapps * w.numifs * w.numchans * spec_per_row);
 
     // Create the FFTW plan
     lags = (float *) fftwf_malloc((w.numchans + 1) * sizeof(float));
@@ -65,7 +75,32 @@ int main(int argc, char *argv[])
     strcpy(pf.basefilename, cmd->outfile);
     psrfits_create(&pf);
 
-    // Loop over the input files
+    // Loop over the data
+
+    // The rows in the output file
+    for (rownum = 0 ; rownum < numrows ; rownum++) {
+        // The spectra per row
+        for (specnum = 0 ; spec_per_row < numrows ; specnum++) {
+            read_WAPP_lags(infiles, numfiles, cmd->numwapps, rawdata, &w);
+            WAPP_lags_to_spectra(cmd->numwapps, &w, rawdata, 
+                                 fspects + specnum * pf.hdr.nchan * pf.hdr.npol, 
+                                 lags, fftplan);
+        }
+        // Compute the statistics here, and put the offsets and scales in
+        // pf.sub.dat_offsets[] and pf.sub.dat_scales[]
+        // Note:  currently these are spectra in time...  we need
+        //        to transpose if we need channels...
+
+        // Then do the conversion to 4- or 8-bits and store the
+        // results in pf.sub.data[]
+
+        // Now write the row...
+        status = psrfits_write_subint(&pf);
+        if (status) {
+            printf("\nError (%d) writing PSRFITS...\n\n", status);
+            break;
+        }
+    }
 
     // Close the PSRFITS file
     psrfits_close(&pf);
@@ -77,6 +112,7 @@ int main(int argc, char *argv[])
     free(pf.sub.dat_scales);
     free(pf.sub.data);
     free(fspects);
+    free(rawdata);
     free(lags);
     return 0;
 }

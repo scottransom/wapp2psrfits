@@ -6,7 +6,6 @@
 #include "wapp.h"
 #include "psrfits.h"
 #include "slalib.h"
-#include "fftw3.h"
 
 #ifndef DEGTORAD
 #define DEGTORAD 0.017453292519943295769236907684886127134428718885417
@@ -546,7 +545,41 @@ long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
 }
 
 
-
+int read_WAPP_lags(FILE *infiles[], int numfiles, int numwapps,
+                   unsigned char *data, struct wappinfo *w)
+// This routine reads a set of lags from the input files *infiles
+// which contain 16 or 32 bit lag data from the WAPP correlator at
+// Arecibo.  A set of WAPP lags is bytes_per_sample * numchans * #bits
+// * numwapps long.  *data must be at least that long
+{
+    int ii;
+    static int currentfile = 0, numread = 0;
+    
+    // Make sure our current file number is valid
+    if (currentfile >= numfiles / numwapps)
+        return 0;
+    
+    // First, attempt to read data from the current file
+    if (chkfread(data, w->bytes_per_sample, 1, 
+                 infiles[currentfile * numwapps])) { // Got data
+        // Get data from other WAPPs
+        for (ii = 1 ; ii < numwapps; ii++)
+            chkfread(data + ii * w->bytes_per_sample, w->bytes_per_sample, 1,
+                     infiles[currentfile * numwapps + ii]);
+        numread++;
+        return 1;
+    } else { // Didn't get data
+        if (feof(infiles[currentfile * numwapps])) { // End of file?
+            currentfile++;
+            return read_WAPP_lags(infiles, numfiles, numwapps, data, w);
+        } else {
+            printf("\nProblem reading record from WAPP data file:\n");
+            printf("   currentfile = %d.  Exiting.\n",
+                   currentfile);
+            exit(1);
+        }
+    }
+}
 
 
 void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w, 

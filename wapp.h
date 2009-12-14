@@ -1,5 +1,6 @@
 #include "psrfits.h"
 #include "wapp_key.h"
+#include "fftw3.h"
 
 /* time between correlator dumps in us */
 #define WAPP_DEADTIME 0.34
@@ -31,3 +32,7 @@ long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
 
 void fill_psrfits_struct(int numwapps, struct HEADERP *h, 
                          struct wappinfo *w, struct psrfits *pf);
+
+int read_WAPP_lags(FILE *infiles[], int numfiles, int numwapps,
+                   unsigned char *data, struct wappinfo *w);
+
