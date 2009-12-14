@@ -6,6 +6,7 @@
 #include "wapp.h"
 #include "psrfits.h"
 #include "slalib.h"
+#include "fftw3.h"
 
 #ifndef DEGTORAD
 #define DEGTORAD 0.017453292519943295769236907684886127134428718885417
@@ -15,6 +16,10 @@
 #endif
 #ifndef SOL
 #define SOL 299792458.0
+#endif
+#ifndef SWAP
+/* Swaps two variables of undetermined type */
+#define SWAP(a,b) tempzz=(a);(a)=(b);(b)=tempzz;
 #endif
 
 static double inv_cerf(double input);
@@ -158,16 +163,23 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     
     // Number of IFs (i.e. polns) in the data
     w->numifs = get_hdr_int(h, "nifs");
-    
+    if (w->numifs > 1) {
+        printf("\nERROR:  wapp2psrfits cannot (yet?) handle more than 1 IF!\n\n");
+        exit(1);
+    }
+
     // 16- or 32-bit lags
     ival = get_hdr_int(h, "lagformat");
     if (ival == 0)
         w->bits_per_lag = 16;
     else if (ival == 1)
         w->bits_per_lag = 32;
-    else
-        printf("\nERROR:  Unrecognized number of bits per sample ('lagformat')!\n\n");
-    
+    else {
+        printf("\nERROR:  Unrecognized bits per sample (%d, 'lagformat')!\n\n", 
+               w->bits_per_lag);
+        exit(1);
+    }    
+
     // How many bytes are there in a sample in time (i.e. all the lags)
     w->bytes_per_sample = (w->bits_per_lag/8) * w->numifs * w->numchans;
 
@@ -177,9 +189,12 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
         w->corr_level = 3;
     else if (ival==2)
         w->corr_level = 9;
-    else
-        printf("\nERROR:  Unrecognized 'level' setting!\n\n");
-    
+    else {
+        printf("\nERROR:  Unrecognized 'level' setting! (%d)\n\n", 
+               w->corr_level);
+        exit(1);
+    }    
+
     // Is the band inverted?  (i.e. lower sideband)
     w->invertband = 0;
     if (get_hdr_int(h, "freqinversion")) {
@@ -411,11 +426,11 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
     }
  
     pf->hdr.dt = w->dt;
-    pf->hdr.fctr = w->fctr;
-    pf->hdr.BW = w->BW;
+    pf->hdr.fctr = w->fctr + 0.5 * (numwapps - 1.0) * w->BW;
+    pf->hdr.BW = w->BW * numwapps;
     pf->hdr.beam_FWHM = beam_FWHM(pf->hdr.fctr, 300.0);
-    pf->hdr.nchan = w->numchans;
-    pf->hdr.orig_nchan = w->numchans;
+    pf->hdr.nchan = w->numchans * numwapps;
+    pf->hdr.orig_nchan = w->numchans * numwapps;
     pf->hdr.orig_df = pf->hdr.df = pf->hdr.BW / pf->hdr.nchan;
     pf->hdr.nbits = 8;  // This needs to be re-set by the command line option
     pf->hdr.npol = w->numifs;
@@ -460,17 +475,17 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
     pf->sub.FITS_typecode = TBYTE;  // 11 = byte
 
     // Create and initialize the subint arrays
-    pf->sub.dat_freqs = gen_fvect(pf->hdr.nchan * numwapps);
-    pf->sub.dat_weights = gen_fvect(pf->hdr.nchan * numwapps);
-    for (ii = 0 ; ii < pf->hdr.nchan * numwapps; ii++) {
+    pf->sub.dat_freqs = gen_fvect(pf->hdr.nchan);
+    pf->sub.dat_weights = gen_fvect(pf->hdr.nchan);
+    for (ii = 0 ; ii < pf->hdr.nchan ; ii++) {
         pf->sub.dat_freqs[ii] = w->lofreq + ii * pf->hdr.df;
         pf->sub.dat_weights[ii] = 1.0;
     }
 
     // The following need to be adjusted for 4-bit data at least...
-    pf->sub.dat_offsets = gen_fvect(pf->hdr.nchan * pf->hdr.npol * numwapps);
-    pf->sub.dat_scales = gen_fvect(pf->hdr.nchan * pf->hdr.npol * numwapps);
-    for (ii = 0 ; ii < pf->hdr.nchan * pf->hdr.npol * numwapps; ii++) {
+    pf->sub.dat_offsets = gen_fvect(pf->hdr.nchan * pf->hdr.npol);
+    pf->sub.dat_scales = gen_fvect(pf->hdr.nchan * pf->hdr.npol);
+    for (ii = 0 ; ii < pf->hdr.nchan * pf->hdr.npol ; ii++) {
         pf->sub.dat_offsets[ii] = 0.0;
         pf->sub.dat_scales[ii] = 1.0;
     }
@@ -530,3 +545,305 @@ long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
     return N;
 }
 
+
+
+
+
+void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w, 
+                          void *rawdata, float *spectra, float *lags, 
+                          fftwf_plan fftplan)
+// This routine converts a single point of WAPP lags
+// into a filterbank style spectrum array of floats.
+// Van Vleck corrections are applied.
+{
+    int ii, ifnum = 0, wappnum = 0, index = 0;
+    double power;
+    
+    // Loop over the WAPPs
+    for (wappnum = 0 ; wappnum < numwapps ; wappnum++) {
+        index = wappnum * w->numifs;
+        
+        // Loop over the IFs
+        for (ifnum = 0 ; ifnum < w->numifs ; ifnum++, index += w->numchans) {
+            
+            // Fill lag array with scaled CFs
+            if (w->bits_per_lag == 16) {
+                unsigned short *sdata = (unsigned short *) rawdata;
+                for (ii = 0 ; ii < w->numchans ; ii++)
+                    lags[ii] = w->corr_scale * sdata[ii + index] - 1.0;
+            } else {
+                unsigned int *idata = (unsigned int *) rawdata;
+                for (ii = 0 ; ii < w->numchans ; ii++)
+                    lags[ii] = w->corr_scale * idata[ii + index] - 1.0;
+            }
+            
+            // Calculate power
+            power = inv_cerf(lags[0]);
+            power = 0.1872721836 / (power * power);
+            
+            // Apply Van Vleck Corrections to the Lags
+            if (w->corr_level == 3)
+                vanvleck3lev(lags, w->numchans);
+            else
+                vanvleck9lev(lags, w->numchans);
+            
+            for (ii = 0 ; ii < w->numchans ; ii++)
+                lags[ii] *= power;
+        
+            // FFT the ACF lags (which are real and even) -> real and even FFT
+            lags[w->numchans] = 0.0;
+            fftwf_execute(fftplan);
+        
+#if 1
+            printf("\n");
+            for (ii = 0 ; ii < w->numchans ; ii++)
+                printf("%d  %.7g\n", ii, lags[ii]);
+            printf("\n");
+            exit(0);
+#endif
+        
+            // Reverse the band if it needs it
+            if (w->invertband) {
+                float tempzz = 0.0, *loptr, *hiptr;
+                loptr = lags + 0;
+                hiptr = lags + w->numchans - 1;
+                for (ii = 0 ; ii < w->numchans / 2 ; ii++, loptr++, hiptr--) {
+                    SWAP(*loptr, *hiptr);
+                }
+            }
+            
+            // Copy the spectra into the proper portion of the spectra array
+            for (ii = 0 ; ii < w->numchans ; ii++)
+                spectra[index + ii] = lags[ii];
+        }
+    }
+}
+
+
+
+static double inv_cerf(double input)
+/* Approximation for Inverse Complementary Error Function */
+{
+   static double numerator_const[3] = {
+      1.591863138, -2.442326820, 0.37153461
+   };
+   static double denominator_const[3] = {
+      1.467751692, -3.013136362, 1.0
+   };
+   double num, denom, temp_data, temp_data_srq, erf_data;
+
+   erf_data = 1.0 - input;
+   temp_data = erf_data * erf_data - 0.5625;
+   temp_data_srq = temp_data * temp_data;
+   num = erf_data * (numerator_const[0] +
+                     (temp_data * numerator_const[1]) +
+                     (temp_data_srq * numerator_const[2]));
+   denom = denominator_const[0] + temp_data * denominator_const[1] +
+       temp_data_srq * denominator_const[2];
+   return num / denom;
+}
+
+
+#define NO    0
+#define YES   1
+/*------------------------------------------------------------------------*
+ * Van Vleck Correction for 9-level sampling/correlation
+ *  Samples {-4,-3,-2,-1,0,1,2,3,4}
+ * Uses Zerolag to adjust correction
+ *   data_array -> Points into ACF of at least 'count' points
+ * This routine takes the first value as the zerolag and corrects the
+ * remaining count-1 points.  Zerolag is set to a normalized 1
+ * NOTE - The available routine works on lags normaized to -16<rho<16, so
+ *  I need to adjust the values before/after the fit
+ * Coefficent ranges
+ *   c1
+ *     all
+ *   c2
+ *     r0 > 4.5
+ *     r0 < 2.1
+ *     rest
+ * NOTE - correction is done INPLACE ! Original values are destroyed
+ * As reported by M. Lewis -> polynomial fits are OK, but could be improved
+ *------------------------------------------------------------------------*/
+static void vanvleck9lev(float *rho, int npts)
+{
+   double acoef[5], dtmp, zl;
+   int i;
+   static double coef1[5] =
+       { 1.105842267, -0.053258115, 0.011830276, -0.000916417, 0.000033479 };
+   static double coef2rg4p5[5] =
+       { 0.111705575, -0.066425925, 0.014844439, -0.001369796, 0.000044119 };
+   static double coef2rl2p1[5] =
+       { 1.285303775, -1.472216011, 0.640885537, -0.123486209, 0.008817175 };
+   static double coef2rother[5] =
+       { 0.519701391, -0.451046837, 0.149153116, -0.021957940, 0.001212970 };
+   static double coef3rg2p0[5] =
+       { 1.244495105, -0.274900651, 0.022660239, -0.000760938, -1.993790548 };
+   static double coef3rother[5] =
+       { 1.249032787, 0.101951346, -0.126743165, 0.015221707, -2.625961708 };
+   static double coef4rg3p15[5] =
+       { 0.664003237, -0.403651682, 0.093057131, -0.008831547, 0.000291295 };
+   static double coef4rother[5] =
+       { 9.866677289, -12.858153787, 6.556692205, -1.519871179, 0.133591758 };
+   static double coef5rg4p0[4] =
+       { 0.033076469, -0.020621902, 0.001428681, 0.000033733 };
+   static double coef5rg2p2[4] =
+       { 5.284269565, 6.571535249, -2.897741312, 0.443156543 };
+   static double coef5rother[4] =
+       { -1.475903733, 1.158114934, -0.311659264, 0.028185170 };
+
+   zl = rho[0] * 16;
+   /* ro = *rho;                 */
+   /*  for(i=0; i<npts; i++)     */
+   /*    (rho+i) *= *(rho+i)/ro; */
+   acoef[0] =
+       ((((coef1[4] * zl + coef1[3]) * zl + coef1[2]) * zl +
+         coef1[1]) * zl + coef1[0]);
+   if (zl > 4.50)
+      acoef[1] =
+          ((((coef2rg4p5[4] * zl + coef2rg4p5[3]) * zl +
+             coef2rg4p5[2]) * zl + coef2rg4p5[1]) * zl + coef2rg4p5[0]);
+   else if (zl < 2.10)
+      acoef[1] =
+          ((((coef2rl2p1[4] * zl + coef2rl2p1[3]) * zl +
+             coef2rl2p1[2]) * zl + coef2rl2p1[1]) * zl + coef2rl2p1[0]);
+   else
+      acoef[1] =
+          ((((coef2rother[4] * zl + coef2rother[3]) * zl +
+             coef2rother[2]) * zl + coef2rother[1]) * zl + coef2rother[0]);
+   if (zl > 2.00)
+      acoef[2] =
+          coef3rg2p0[4] / zl +
+          (((coef3rg2p0[3] * zl + coef3rg2p0[2]) * zl +
+            coef3rg2p0[1]) * zl + coef3rg2p0[0]);
+   else
+      acoef[2] =
+          coef3rother[4] / zl +
+          (((coef3rother[3] * zl + coef3rother[2]) * zl +
+            coef3rother[1]) * zl + coef3rother[0]);
+   if (zl > 3.15)
+      acoef[3] =
+          ((((coef4rg3p15[4] * zl + coef4rg3p15[3]) * zl +
+             coef4rg3p15[2]) * zl + coef4rg3p15[1]) * zl + coef4rg3p15[0]);
+   else
+      acoef[3] =
+          ((((coef4rg3p15[4] * zl + coef4rother[3]) * zl +
+             coef4rother[2]) * zl + coef4rother[1]) * zl + coef4rother[0]);
+   if (zl > 4.00)
+      acoef[4] =
+          (((coef5rg4p0[3] * zl + coef5rg4p0[2]) * zl +
+            coef5rg4p0[1]) * zl + coef5rg4p0[0]);
+   else if (zl < 2.2)
+      acoef[4] =
+          (((coef5rg2p2[3] * zl + coef5rg2p2[2]) * zl +
+            coef5rg2p2[1]) * zl + coef5rg2p2[0]);
+   else
+      acoef[4] =
+          (((coef5rother[3] * zl + coef5rother[2]) * zl +
+            coef5rother[1]) * zl + coef5rother[0]);
+   for (i = 1; i < npts; i++) {
+      dtmp = rho[i];
+      rho[i] =
+          ((((acoef[4] * dtmp + acoef[3]) * dtmp + acoef[2]) * dtmp +
+            acoef[1]) * dtmp + acoef[0]) * dtmp;
+   }
+   rho[0] = 1.0;
+   return;
+}
+
+/*------------------------------------------------------------------------*
+ * Van Vleck Correction for 3-level sampling/correlation
+ *  Samples {-1,0,1}
+ * Uses Zerolag to adjust correction
+ *   data_array -> Points into ACF of at least 'count' points
+ * This routine takes the first value as the zerolag and corrects the
+ * remaining count-1 points.  Zerolag is set to a normalized 1
+ *
+ * NOTE - correction is done INPLACE ! Original values are destroyed
+ *------------------------------------------------------------------------*/
+static void vanvleck3lev(float *rho, int npts)
+{
+   double lo_u[3], lo_h[3];
+   double high_u[5], high_h[5];
+   double lo_coefficient[3];
+   double high_coefficient[5];
+   double zho, zho_3;
+   double temp_data;
+   double temp_data_1;
+   int ichan, ico, flag_any_high;
+   static double lo_const[3][4] = {
+      {0.939134371719, -0.567722496249, 1.02542540932, 0.130740914912},
+      {-0.369374472755, -0.430065136734, -0.06309459132, -0.00253019992917},
+      {0.888607422108, -0.230608118885, 0.0586846424223, 0.002012775510695}
+   };
+   static double high_const[5][4] = {
+      {-1.83332160595, 0.719551585882, 1.214003774444, 7.15276068378e-5},
+      {1.28629698818, -1.45854382672, -0.239102591283, -0.00555197725185},
+      {-7.93388279993, 1.91497870485, 0.351469403030, 0.00224706453982},
+      {8.04241371651, -1.51590759772, -0.18532022393, -0.00342644824947},
+      {-13.076435520, 0.769752851477, 0.396594438775, 0.0164354218208}
+   };
+
+   /* Perform Lo correction on All data that is not flaged 
+      for high correction  */
+   zho = (double) rho[0];
+   zho_3 = zho * zho * zho;
+   lo_u[0] = zho;
+   lo_u[1] = zho_3 - (61.0 / 512.0);
+   lo_u[2] = zho - (63.0 / 128.0);
+   lo_h[0] = zho * zho;
+   lo_h[2] = zho_3 * zho_3 * zho;       /* zlag ^7 */
+   lo_h[1] = zho * lo_h[2];     /* zlag ^8 */
+   /* determine lo-correct coefficents - */
+   for (ico = 0; ico < 3; ico++) {
+      lo_coefficient[ico] =
+          (lo_u[ico] *
+           (lo_u[ico] *
+            (lo_u[ico] * lo_const[ico][0] + lo_const[ico][1]) +
+            lo_const[ico][2]) + lo_const[ico][3]) / lo_h[ico];
+   }
+   /* perform correction -- */
+   for (ichan = 1, flag_any_high = NO; ichan < npts; ichan++) {
+      temp_data = (double) rho[ichan];
+      if (fabs(temp_data) > 0.199) {
+         if (flag_any_high == NO) {
+            high_u[0] = lo_h[2];        /* zlag ^7 */
+            high_u[1] = zho - (63.0 / 128.0);
+            high_u[2] = zho * zho - (31.0 / 128.0);
+            high_u[3] = zho_3 - (61.0 / 512.0);
+            high_u[4] = zho - (63.0 / 128.0);
+            high_h[0] = lo_h[1];        /* zlag ^8 */
+            high_h[1] = lo_h[1];        /* zlag ^8 */
+            high_h[2] = lo_h[1] * zho_3 * zho;  /* zlag ^12 */
+            high_h[3] = lo_h[1] * lo_h[1] * zho;        /* zlag ^17 */
+            high_h[4] = high_h[3];      /* zlag ^17 */
+            for (ico = 0; ico < 5; ico++) {
+               high_coefficient[ico] =
+                   (high_u[ico] *
+                    (high_u[ico] *
+                     (high_u[ico] * high_const[ico][0] +
+                      high_const[ico][1]) + high_const[ico][2]) +
+                    high_const[ico][3]) / high_h[ico];
+            }
+            flag_any_high = YES;
+         }
+         temp_data_1 = fabs(temp_data * temp_data * temp_data);
+         rho[ichan] =
+             (temp_data *
+              (temp_data_1 *
+               (temp_data_1 *
+                (temp_data_1 *
+                 (temp_data_1 * high_coefficient[4] +
+                  high_coefficient[3]) + high_coefficient[2]) +
+                high_coefficient[1]) + high_coefficient[0]));
+      } else {
+         temp_data_1 = temp_data * temp_data;
+         rho[ichan] =
+             (temp_data *
+              (temp_data_1 *
+               (temp_data_1 * lo_coefficient[2] + lo_coefficient[1]) +
+               lo_coefficient[0]));
+      }
+   }
+   rho[0] = 1.0;
+}
