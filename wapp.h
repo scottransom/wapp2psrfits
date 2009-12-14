@@ -36,3 +36,7 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
 int read_WAPP_lags(FILE *infiles[], int numfiles, int numwapps,
                    unsigned char *data, struct wappinfo *w);
 
+void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w, 
+                          void *rawdata, float *spectra, float *lags, 
+                          fftwf_plan fftplan);
+
