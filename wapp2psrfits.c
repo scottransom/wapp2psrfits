@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
             for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; ichan+=2){
                 datidx = (itsamp * pf.hdr.nchan * pf.hdr.npol) + ichan;
                 packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
-                pf.sub.data[datidx] = (unsigned char)packdatum;
+                pf.sub.data[datidx/2] = (unsigned char)packdatum;
             }
         }
 	    
