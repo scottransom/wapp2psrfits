@@ -431,7 +431,7 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
     pf->hdr.nchan = w->numchans * numwapps;
     pf->hdr.orig_nchan = w->numchans * numwapps;
     pf->hdr.orig_df = pf->hdr.df = pf->hdr.BW / pf->hdr.nchan;
-    pf->hdr.nbits = 8;  // This needs to be re-set by the command line option
+    pf->hdr.nbits = 4;  // This needs to be re-set by the command line option
     pf->hdr.npol = w->numifs;
     pf->hdr.MJD_epoch = w->MJD_epoch;
     pf->hdr.start_day = (int) (w->MJD_epoch);
@@ -627,7 +627,7 @@ void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w,
             lags[w->numchans] = 0.0;
             fftwf_execute(fftplan);
         
-#if 1
+#if 0
             printf("\n");
             for (ii = 0 ; ii < w->numchans ; ii++)
                 printf("%d  %.7g\n", ii, lags[ii]);

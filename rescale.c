@@ -15,7 +15,7 @@ static char rcsid[] = "$Id: rescale.c,v 1.5 2009/11/25 05:40:49 shami Exp $";
 #define USIGMA 3.5      
 #define LSIGMA 2.5
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 /******************************/
 int floatcmp(const void *v1, const void *v2){
@@ -34,7 +34,6 @@ int basicscale(float *datav, int ndata, float *offset, float *scale){
 int rescale(float *datav, int ndata, float *offset, float *scale){
 
   float *datacopy;
-  int i;
   float median, s1lo, s1hi, qlow, qhigh;
 
   datacopy = (float *)malloc(ndata*sizeof(float));
@@ -64,7 +63,7 @@ int rescale(float *datav, int ndata, float *offset, float *scale){
 
 #if(VERBOSE)
   printf("# Median = %.1f, 1 sigma = %.1f  %.1f, Clip at %.1f  %.1f\n",
-	 median, s1lo, s1hi, qlow, qhigh);
+  	 median, s1lo, s1hi, qlow, qhigh);
 #endif
 
   // X(0..65536) -> Y(0..15); 
@@ -81,7 +80,6 @@ int rescale(float *datav, int ndata, float *offset, float *scale){
 int medianrescale(float *datav, int ndata, float *offset, float *scale){
 
   float *datacopy;
-  int i;
   float median, s1lo, s1hi, qlow, qhigh;
 
   datacopy = (float *)malloc(ndata*sizeof(float));

@@ -1,22 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "fftw3.h"
 #include "chkio.h"
 #include "wapp.h"
 #include "vectors.h"
 #include "wapp2psrfits_cmd.h"
 #include "psrfits.h"
+#include "rescale.h"
 
 extern short transpose_float(float *a, int nx, int ny, unsigned char *move,
                              int move_size);
 
 int main(int argc, char *argv[])
 {
-    int numfiles, ii, numrows, rownum;
+  int numfiles, ii, numrows, rownum, ichan, itsamp, datidx;
     int spec_per_row, specnum, status, move_size;
     short trtn;
-    float *lags, *fspects;
+    float offset, scale, datum, packdatum; 
+    float *lags, *fspects, *datachunk;
     long long N=0;
     unsigned char *move, *rawdata;
     FILE **infiles;
@@ -27,7 +30,7 @@ int main(int argc, char *argv[])
     fftwf_plan fftplan;
     
     if (argc == 1) {
-        Program = argv[0];
+      Program = argv[0];
         usage();
         exit(1);
     }
@@ -73,6 +76,9 @@ int main(int argc, char *argv[])
     // For the transposes
     move_size = (spec_per_row + pf.hdr.nchan * pf.hdr.npol) / 2;
     move = gen_bvect(move_size);
+    // Staging array for the rescaling process: 
+    datachunk = gen_fvect(spec_per_row);
+    // (size is usually 1 sec / 64 microsec = 15625)
 
     // Create the FFTW plan
     lags = (float *) fftwf_malloc((w.numchans + 1) * sizeof(float));
@@ -91,28 +97,60 @@ int main(int argc, char *argv[])
         fflush(stdout);
 
         // Loop over all the spectra per row
-        for (specnum = 0 ; spec_per_row < numrows ; specnum++) {
+        for (specnum = 0 ; specnum < spec_per_row ; specnum++) {
             read_WAPP_lags(infiles, numfiles, cmd->numwapps, rawdata, &w);
             WAPP_lags_to_spectra(cmd->numwapps, &w, rawdata, 
                                  fspects + specnum * pf.hdr.nchan * pf.hdr.npol, 
                                  lags, fftplan);
         }
-
+        
         // Transpose the array so that it is grouped by channels 
         // rather than spectra
-        if ((trtn = transpose_float(fspects, spec_per_row, 
-                                    pf.hdr.nchan * pf.hdr.npol,
-                                    move, move_size)) < 0) {
-            printf("\nError (%d) in transpose_float().\n\n", trtn);
-            exit(1);
-        }
+        //if ((trtn = transpose_float(fspects, spec_per_row, 
+        //                            pf.hdr.nchan * pf.hdr.npol,
+        //                            move, move_size)) < 0) {
+        //    printf("\nError (%d) in transpose_float().\n\n", trtn);
+        //    exit(1);
+        //}
         
-        // Compute the statistics here, and put the offsets and scales in
-        // pf.sub.dat_offsets[] and pf.sub.dat_scales[]
+        // Loop over all the channels:
+        for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; ichan++){
 
-        // Then do the conversion to 4- or 8-bits and store the
-        // results in pf.sub.data[], transposing as we go...
+            // Populate datachunk[] by picking out all time samples for ichan
+            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+                datachunk[itsamp] = 
+                    fspects[ichan + itsamp * pf.hdr.nchan * pf.hdr.npol];
+            }
+            
+            // Compute the statistics here, and put the offsets and scales in
+            // pf.sub.dat_offsets[] and pf.sub.dat_scales[]
+            
+            if (rescale(datachunk, spec_per_row, &offset, &scale)!=0){
+                printf("Rescale routine failed!\n");
+                return(-1);
+            }
+            pf.sub.dat_offsets[ichan] = offset;
+            pf.sub.dat_scales[ichan] = scale;
+            
+            // Since we have the offset and scale ready, rescale the data:
+            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+                datum = roundf((datachunk[itsamp] - offset) / scale);
+                datum = (datum < 0.0) ? 0.0 : datum;
+                fspects[ichan + itsamp * pf.hdr.nchan * pf.hdr.npol] = datum;
+            }	  
+            // Now fspects[ichan] contains rescaled (0-16) floats.
+        }
 
+        // Then do the conversion to 4-bits and store the
+        // results in pf.sub.data[] 
+        for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+            for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; ichan+=2){
+                datidx = (itsamp * pf.hdr.nchan * pf.hdr.npol) + ichan;
+                packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
+                pf.sub.data[datidx] = (unsigned char)packdatum;
+            }
+        }
+	    
         // Now write the row...
         status = psrfits_write_subint(&pf);
         if (status) {
@@ -121,11 +159,12 @@ int main(int argc, char *argv[])
         }
     }
     printf("\n");
-
+    
     // Close the PSRFITS file
     psrfits_close(&pf);
-
+    
     // Free the structure arrays too...
+    free(datachunk);
     free(pf.sub.dat_freqs);
     free(pf.sub.dat_weights);
     free(pf.sub.dat_offsets);
