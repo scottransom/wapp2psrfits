@@ -152,6 +152,7 @@ int main(int argc, char *argv[])
         }
 	    
         // Now write the row...
+        pf.sub.offs = (pf.tot_rows+0.5) * pf.sub.tsubint;
         status = psrfits_write_subint(&pf);
         if (status) {
             printf("\nError (%d) writing PSRFITS...\n\n", status);
