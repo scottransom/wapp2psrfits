@@ -30,7 +30,7 @@ struct wappinfo {
 long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
                         struct HEADERP **h, struct wappinfo *w);
 
-void fill_psrfits_struct(int numwapps, struct HEADERP *h, 
+void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h, 
                          struct wappinfo *w, struct psrfits *pf);
 
 int read_WAPP_lags(FILE *infiles[], int numfiles, int numwapps,

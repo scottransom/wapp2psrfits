@@ -376,7 +376,7 @@ static void dec2hms(char *out, double in, int sflag) {
 }
 
 
-void fill_psrfits_struct(int numwapps, struct HEADERP *h, 
+void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h, 
                          struct wappinfo *w, struct psrfits *pf)
 {
     int slen, ii;
@@ -431,7 +431,7 @@ void fill_psrfits_struct(int numwapps, struct HEADERP *h,
     pf->hdr.nchan = w->numchans * numwapps;
     pf->hdr.orig_nchan = w->numchans * numwapps;
     pf->hdr.orig_df = pf->hdr.df = pf->hdr.BW / pf->hdr.nchan;
-    pf->hdr.nbits = 4;  // This needs to be re-set by the command line option
+    pf->hdr.nbits = numbits;
     pf->hdr.npol = w->numifs;
     pf->hdr.MJD_epoch = w->MJD_epoch;
     pf->hdr.start_day = (int) (w->MJD_epoch);

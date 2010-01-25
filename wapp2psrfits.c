@@ -37,9 +37,6 @@ int main(int argc, char *argv[])
 
     // Parse the command line using the excellent program Clig
     cmd = parseCmdline(argc, argv);
-    numfiles = cmd->argc;
-    infiles = (FILE **) malloc(numfiles * sizeof(FILE *));
-    
 #ifdef DEBUG
     showOptionValues();
 #endif
@@ -47,6 +44,13 @@ int main(int argc, char *argv[])
     printf("\n           WAPP to PSRFITs Conversion Code\n");
     printf("            by S. Ransom & S. Chatterjee\n\n");
     
+    if (!(cmd->numbits==4 || cmd->numbits==8)) {
+        printf("ERROR:  -b (# of output bits) must be 4 or 8!\n");
+        exit(1);
+    }
+
+    numfiles = cmd->argc;
+    infiles = (FILE **) malloc(numfiles * sizeof(FILE *));
     // Open the input files
     printf("Reading input data from:\n");
     for (ii = 0; ii < numfiles; ii++) {
@@ -59,7 +63,7 @@ int main(int argc, char *argv[])
     printf("Found a total of %lld samples.\n", N);
                       
     // Prep the psrfits structure
-    fill_psrfits_struct(cmd->numwapps, hdr, &w, &pf);
+    fill_psrfits_struct(cmd->numwapps, cmd->numbits, hdr, &w, &pf);
     close_parse(hdr);
     spec_per_row = pf.hdr.nsblk;
     numrows = N / spec_per_row;
@@ -103,16 +107,7 @@ int main(int argc, char *argv[])
                                  fspects + specnum * pf.hdr.nchan * pf.hdr.npol, 
                                  lags, fftplan);
         }
-        
-        // Transpose the array so that it is grouped by channels 
-        // rather than spectra
-        //if ((trtn = transpose_float(fspects, spec_per_row, 
-        //                            pf.hdr.nchan * pf.hdr.npol,
-        //                            move, move_size)) < 0) {
-        //    printf("\nError (%d) in transpose_float().\n\n", trtn);
-        //    exit(1);
-        //}
-        
+
         // Loop over all the channels:
         for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; ichan++){
 
@@ -125,7 +120,7 @@ int main(int argc, char *argv[])
             // Compute the statistics here, and put the offsets and scales in
             // pf.sub.dat_offsets[] and pf.sub.dat_scales[]
             
-            if (rescale(datachunk, spec_per_row, &offset, &scale)!=0){
+            if (rescale(datachunk, spec_per_row, cmd->numbits, &offset, &scale)!=0){
                 printf("Rescale routine failed!\n");
                 return(-1);
             }
@@ -134,20 +129,34 @@ int main(int argc, char *argv[])
             
             // Since we have the offset and scale ready, rescale the data:
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
-                datum = roundf((datachunk[itsamp] - offset) / scale);
-                datum = (datum < 0.0) ? 0.0 : datum;
+                datum = (scale==0.0) ? 0.0 : \
+                    roundf((datachunk[itsamp] - offset) / scale);
                 fspects[ichan + itsamp * pf.hdr.nchan * pf.hdr.npol] = datum;
             }	  
-            // Now fspects[ichan] contains rescaled (0-16) floats.
+            // Now fspects[ichan] contains rescaled floats.
         }
 
-        // Then do the conversion to 4-bits and store the
+        // Then do the conversion to 4-bits or 8-bits and store the
         // results in pf.sub.data[] 
-        for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
-            for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; ichan+=2){
-                datidx = (itsamp * pf.hdr.nchan * pf.hdr.npol) + ichan;
-                packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
-                pf.sub.data[datidx/2] = (unsigned char)packdatum;
+        if (cmd->numbits==4) {
+            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+                datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
+                for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
+                     ichan+=2, dataidx++){
+                    packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
+                    pf.sub.data[datidx/2] = (unsigned char)packdatum;
+                }
+            }
+        } else {  // cmd->numbits==8
+            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+                datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
+                for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
+                     ichan++, dataidx++){
+                    //if (fspects[datidx] > 256.0 || fspects[datidx] < 0.0) {
+                    //    printf("Yikes!  %d  %d  %.7g\n", itsamp, ichan, fspects[datidx]);
+                    //}
+                    pf.sub.data[datidx] = (unsigned char)fspects[datidx];
+                }
             }
         }
 	    
