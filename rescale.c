@@ -18,8 +18,10 @@ static char rcsid[] = "$Id: rescale.c,v 1.5 2009/11/25 05:40:49 shami Exp $";
 #define VERBOSE 0
 
 /******************************/
-int floatcmp(const void *v1, const void *v2){
-  return (*(float *)v1 - *(float *)v2);
+int floatcmp(const void *a, const void *b){
+    const float *da = (const float *) a;
+    const float *db = (const float *) b;
+    return (*da > *db) - (*da < *db);
 }
 
 /******************************/
@@ -31,7 +33,7 @@ int basicscale(float *datav, int ndata, float *offset, float *scale){
 }
 
 /******************************/
-int rescale(float *datav, int ndata, float *offset, float *scale){
+int rescale(float *datav, int ndata, int nbits, float *offset, float *scale){
 
   float *datacopy;
   float median, s1lo, s1hi, qlow, qhigh;
@@ -52,28 +54,28 @@ int rescale(float *datav, int ndata, float *offset, float *scale){
   s1hi = datacopy[(int)(0.8413*ndata)]; // percentiles anyway.
 
   qlow = median - LSIGMA*(median-s1lo);
-  if(qlow<0){qlow=0.0;} // sanity check
-  if(qlow<datacopy[0]){qlow=datacopy[0];} 
-  // Must be >= min(data).
-
+  qlow = (qlow < datacopy[0]) ? datacopy[0] : qlow;
+  
   qhigh = median + USIGMA*(s1hi-median);
-  if(qhigh>65536){qhigh=65536.0;}
-  if(qhigh>datacopy[ndata-1]){qhigh=datacopy[ndata-1];} 
-  // Must be <= max(data).
+  qhigh = (qhigh > datacopy[ndata-1]) ? datacopy[ndata-1] : qhigh;
 
 #if(VERBOSE)
   printf("# Median = %.1f, 1 sigma = %.1f  %.1f, Clip at %.1f  %.1f\n",
   	 median, s1lo, s1hi, qlow, qhigh);
 #endif
 
-  // X(0..65536) -> Y(0..15); 
+  // X(qlow..qhigh) -> Y(0..15);   for 4-bit
   // X = scale*Y + offset; 
   // Y = (X-offset)/scale = (X-qlow)/(qhigh-qlow) * 16.0.
-  *scale = (qhigh-qlow)/16.0 ;
-  *offset = qlow ;
+  
+  if (nbits==4) 
+      *scale = (qhigh - qlow) / 16.0;
+  else // nbits = 8
+      *scale = (qhigh - qlow) / 256.0;
+  *offset = qlow;
   
   free(datacopy);
-  return(0);
+  return 0;
 }
 
 /******************************/
