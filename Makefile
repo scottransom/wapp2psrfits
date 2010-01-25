@@ -27,7 +27,7 @@ CLIG = /usr/local/bin/clig
 %_cmd.c : %_cmd.cli
 	$(CLIG) -o $*_cmd -d $<
 
-OBJS = chkio.o vectors.o sla.o transpose.o wapp.o\
+OBJS = chkio.o vectors.o sla.o transpose.o wapp.o rescale.o\
 	wapp_head_parse.o wapp_y.tab.o write_psrfits.o
 
 wapp2psrfits: wapp2psrfits.o wapp2psrfits_cmd.o $(OBJS)
