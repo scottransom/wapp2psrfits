@@ -17,7 +17,6 @@ int main(int argc, char *argv[])
 {
   int numfiles, ii, numrows, rownum, ichan, itsamp, datidx;
     int spec_per_row, specnum, status, move_size;
-    short trtn;
     float offset, scale, datum, packdatum; 
     float *lags, *fspects, *datachunk;
     long long N=0;
@@ -139,6 +138,7 @@ int main(int argc, char *argv[])
         // Then do the conversion to 4-bits or 8-bits and store the
         // results in pf.sub.data[] 
         if (cmd->numbits==4) {
+            int dataidx;
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
                 for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
@@ -148,6 +148,7 @@ int main(int argc, char *argv[])
                 }
             }
         } else {  // cmd->numbits==8
+            int dataidx;
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
                 for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
