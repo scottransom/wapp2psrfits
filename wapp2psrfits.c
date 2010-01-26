@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
                 for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
-                     ichan+=2, datidx++){
+                     ichan+=2, datidx+=2){
                     packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
                     pf.sub.data[datidx/2] = (unsigned char)packdatum;
                 }
