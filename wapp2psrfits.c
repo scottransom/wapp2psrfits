@@ -15,7 +15,7 @@ extern short transpose_float(float *a, int nx, int ny, unsigned char *move,
 
 int main(int argc, char *argv[])
 {
-  int numfiles, ii, numrows, rownum, ichan, itsamp, datidx;
+    int numfiles, ii, numrows, rownum, ichan, itsamp, datidx;
     int spec_per_row, specnum, status, move_size;
     float offset, scale, datum, packdatum; 
     float *lags, *fspects, *datachunk;
@@ -138,21 +138,19 @@ int main(int argc, char *argv[])
         // Then do the conversion to 4-bits or 8-bits and store the
         // results in pf.sub.data[] 
         if (cmd->numbits==4) {
-            int dataidx;
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
-                for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
-                     ichan+=2, dataidx++){
+                for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
+                     ichan+=2, datidx++){
                     packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
                     pf.sub.data[datidx/2] = (unsigned char)packdatum;
                 }
             }
         } else {  // cmd->numbits==8
-            int dataidx;
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
-                for (ichan=0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
-                     ichan++, dataidx++){
+                for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
+                     ichan++, datidx++){
                     //if (fspects[datidx] > 256.0 || fspects[datidx] < 0.0) {
                     //    printf("Yikes!  %d  %d  %.7g\n", itsamp, ichan, fspects[datidx]);
                     //}
