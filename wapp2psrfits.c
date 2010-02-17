@@ -130,9 +130,18 @@ int main(int argc, char *argv[])
             for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
                 datum = (scale==0.0) ? 0.0 : \
                     roundf((datachunk[itsamp] - offset) / scale);
+		// Check that it lies between 0 and (2^Nbits -1)
+		datum = (datum < 0) ? 0.0 : datum;
+		if (cmd->numbits==4) {
+		  datum = (datum > 15.0) ? 15.0 : datum;
+		} else if (cmd->numbits==8) {
+		  datum = (datum > 255.0) ? 255.0 : datum;
+		} else {
+		  printf("This can't be happening!\n");
+		}
                 fspects[ichan + itsamp * pf.hdr.nchan * pf.hdr.npol] = datum;
             }	  
-            // Now fspects[ichan] contains rescaled floats.
+            // Now fspects[ichan] contains rescaled and clipped floats.
         }
 
         // Then do the conversion to 4-bits or 8-bits and store the
