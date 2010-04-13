@@ -594,7 +594,7 @@ void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w,
     
     // Loop over the WAPPs
     for (wappnum = 0 ; wappnum < numwapps ; wappnum++) {
-        index = wappnum * w->numifs;
+        index = wappnum * w->numifs * w->numchans;
         
         // Loop over the IFs
         for (ifnum = 0 ; ifnum < w->numifs ; ifnum++, index += w->numchans) {
