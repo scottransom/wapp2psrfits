@@ -15,6 +15,7 @@ struct wappinfo {
     int bytes_per_sample;
     int corr_level;
     int invertband;
+    int beamnum;
     double dt;
     double BW;
     double fctr;
@@ -27,7 +28,8 @@ struct wappinfo {
     char date_obs[80];
 };
 
-long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
+long long get_WAPP_info(char *filename, FILE *files[], 
+                        int numfiles, int numwapps,
                         struct HEADERP **h, struct wappinfo *w);
 
 void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h, 

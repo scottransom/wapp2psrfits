@@ -58,7 +58,8 @@ int main(int argc, char *argv[])
     }
 
     // Get the basic information from them
-    N = get_WAPP_info(infiles, numfiles, cmd->numwapps, &hdr, &w);
+    N = get_WAPP_info(cmd->argv[ii], infiles, numfiles, 
+                      cmd->numwapps, &hdr, &w);
     printf("Found a total of %lld samples.\n", N);
                       
     // Prep the psrfits structure

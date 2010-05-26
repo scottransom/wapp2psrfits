@@ -48,6 +48,7 @@ struct hdrinfo {
     double fd_xyph;         // Cal signal poln cross-term phase (deg)
     int start_day;          // Start MJD (UTC days) (J - long integer)
     int scan_number;        // Number of scan
+    int beamnum;            // Beam number for ALFA, otherwise 0
     int nbits;              // Number of bits per data sample 
     int nbin;               // Number of bins per period in fold mode
     int nchan;              // Number of channels

@@ -25,6 +25,18 @@ static double inv_cerf(double input);
 static void vanvleck3lev(float *rho, int npts);
 static void vanvleck9lev(float *rho, int npts);
 
+int wapp_beamnum(char *str){
+    int ii = -1;
+    // Check if filename ends in "_N.wapp"
+    // Return -1 if the file is not a WAPP file or wrong beam num
+    if ((0==strncmp(".wapp", str+strlen(str)-5, 5)) &&
+        (str[strlen(str)-7]=='_')) {
+        ii = atoi(str+strlen(str)-6);
+        if (ii > 7) ii = -1;  // Only 8 WAPPs...
+    }
+    return ii;
+}
+
 char *get_hdr_string(struct HEADERP *h, char *name, int *slen)
 {
     struct HEADERVAL val;
@@ -220,6 +232,8 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     w->df = fabs(w->BW / w->numchans);
 
     // Center freq of the lowest freq channel
+    // TODO:  need to correct for 1/2 channel offset
+    //        I think it is -0.5*w-df for upper sideband...  SMR
     w->lofreq = w->fctr - 0.5 * w->BW + 0.5 * w->df;
 
     // Correlator scaling
@@ -419,6 +433,8 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
     strcpy(pf->hdr.feed_mode, "FA"); // check this...
 
     if (get_hdr_int(h, "isalfa")) {
+        
+
         // TODO:
         //   Need to set the beam number here...
         //   Also should correct positions and paralactic angles etc...
@@ -495,7 +511,7 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
 }
 
 
-long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
+long long get_WAPP_info(char *filename, FILE *files[], int numfiles, int numwapps,
                         struct HEADERP **h, struct wappinfo *w)
 {
     int ii, wappindex;
@@ -507,6 +523,14 @@ long long get_WAPP_info(FILE *files[], int numfiles, int numwapps,
     // This sets the basic parameters of the conversion
     *h = head_parse(files[0]);
     set_wappinfo(*h, w);
+    if (get_hdr_int(*h, "isalfa")) {
+        w->beamnum = wapp_beamnum(filename);
+        if (w->beamnum==-1) {
+            printf("Warning!  isalfa = 1, but beamnum is not set!\n");
+            exit(1);
+        }
+    }
+
     // Number of samples in the file
     w->numsamples = (chkfilelen(files[0], 1) - w->header_size) / 
         w->bytes_per_sample;
