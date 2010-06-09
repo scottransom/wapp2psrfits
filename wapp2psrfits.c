@@ -60,6 +60,30 @@ int main(int argc, char *argv[])
     N = get_WAPP_info(cmd->argv[ii], infiles, numfiles, cmd->numwapps, &hdr, &w);
     printf("Found a total of %lld samples.\n", N);
 
+    // Write a copy of the first(!) original WAPP header
+    {
+        long posn = ftell(infiles[0]);
+        unsigned char *hdr = gen_bvect(w.header_size);
+        char hdrname[200];
+        FILE *hdrfile;
+
+        // Go to the beginning of the first file
+        chkfileseek(infiles[0], 0, 1, SEEK_SET);
+        // Read the ASCII and binary headers together
+        chkfread(hdr, w.header_size, 1, infiles[0]);
+        // The following should be redundant as we should already be there
+        // after reading the header, but just in case...
+        chkfileseek(infiles[0], posn, 1, SEEK_SET);
+        // Determine the output WAPP header file name
+        sprintf(hdrname, "%s.wapp_hdr", cmd->outfile);
+        printf("\nCopying the header from the first WAPP file to '%s'\n", hdrname);
+        // Open, write the header, and close the header file
+        hdrfile = chkfopen(hdrname, "wb");
+        chkfwrite(hdr, w.header_size, 1, hdrfile);
+        fclose(hdrfile);
+        free(hdr);
+    }
+
     // Prep the psrfits structure
     fill_psrfits_struct(cmd->numwapps, cmd->numbits, hdr, &w, &pf);
     close_parse(hdr);
