@@ -10,12 +10,13 @@ COMMENT
 HDRVER  = '4.3             '   / Header version 
 FITSTYPE= 'PSRFITS'            / FITS definition for pulsar data files
 DATE    = '                '   / File creation date (YYYY-MM-DDThh:mm:ss UTC)
+GITHASH = '                '   / GIT hash for the wapp2psrfits code used
 OBSERVER= '                '   / Observer name(s)
 PROJID  = '                '   / Project name
 TELESCOP= 'Arecibo'            / Telescope name
-ANT_X   =  2390490.0         / [m] Antenna ITRF X-coordinate (D)
-ANT_Y   = -5564764.0          / [m] Antenna ITRF Y-coordinate (D)
-ANT_Z   =  1994727.0         / [m] Antenna ITRF Z-coordinate (D)
+ANT_X   =  2390490.0           / [m] Antenna ITRF X-coordinate (D)
+ANT_Y   = -5564764.0           / [m] Antenna ITRF Y-coordinate (D)
+ANT_Z   =  1994727.0           / [m] Antenna ITRF Z-coordinate (D)
 FRONTEND= '                '   / Rx and feed ID
 IBEAM   =                    * / Beam number for multibeam systems (0=ctr beam)
 NRCVR   = 2                    / Number of receiver polarisation channels
