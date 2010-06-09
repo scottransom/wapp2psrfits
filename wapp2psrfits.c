@@ -17,9 +17,9 @@ int main(int argc, char *argv[])
 {
     int numfiles, ii, numrows, rownum, ichan, itsamp, datidx;
     int spec_per_row, specnum, status, move_size;
-    float offset, scale, datum, packdatum; 
+    float offset, scale, datum, packdatum;
     float *lags, *fspects, *datachunk;
-    long long N=0;
+    long long N = 0;
     unsigned char *move, *rawdata;
     FILE **infiles;
     struct HEADERP *hdr;
@@ -27,23 +27,22 @@ int main(int argc, char *argv[])
     struct psrfits pf;
     Cmdline *cmd;
     fftwf_plan fftplan;
-    
+
     if (argc == 1) {
-      Program = argv[0];
+        Program = argv[0];
         usage();
         exit(1);
     }
-
     // Parse the command line using the excellent program Clig
     cmd = parseCmdline(argc, argv);
 #ifdef DEBUG
     showOptionValues();
 #endif
-    
+
     printf("\n           WAPP to PSRFITs Conversion Code\n");
     printf("            by S. Ransom & S. Chatterjee\n\n");
-    
-    if (!(cmd->numbits==4 || cmd->numbits==8)) {
+
+    if (!(cmd->numbits == 4 || cmd->numbits == 8)) {
         printf("ERROR:  -b (# of output bits) must be 4 or 8!\n");
         exit(1);
     }
@@ -58,17 +57,16 @@ int main(int argc, char *argv[])
     }
 
     // Get the basic information from them
-    N = get_WAPP_info(cmd->argv[ii], infiles, numfiles, 
-                      cmd->numwapps, &hdr, &w);
+    N = get_WAPP_info(cmd->argv[ii], infiles, numfiles, cmd->numwapps, &hdr, &w);
     printf("Found a total of %lld samples.\n", N);
-                      
+
     // Prep the psrfits structure
     fill_psrfits_struct(cmd->numwapps, cmd->numbits, hdr, &w, &pf);
     close_parse(hdr);
     spec_per_row = pf.hdr.nsblk;
     numrows = N / spec_per_row;
     pf.rows_per_file = numrows; // NOTE: this will make a _single_ file!  FIXME!
-    printf("PSRFITS will have %d samples per row and %d rows.\n", 
+    printf("PSRFITS will have %d samples per row and %d rows.\n",
            spec_per_row, numrows);
 
     // Create the arrays we will need
@@ -86,7 +84,7 @@ int main(int argc, char *argv[])
 
     // Create the FFTW plan
     lags = (float *) fftwf_malloc((w.numchans + 1) * sizeof(float));
-    fftplan = fftwf_plan_r2r_1d(w.numchans + 1, lags, 
+    fftplan = fftwf_plan_r2r_1d(w.numchans + 1, lags,
                                 lags, FFTW_REDFT00, FFTW_PATIENT);
 
     // Create the PSRFITS file
@@ -96,81 +94,81 @@ int main(int argc, char *argv[])
     // Loop over the data
 
     // The rows in the output file
-    for (rownum = 0 ; rownum < numrows ; rownum++) {
-        printf("\rWorking on row %d", rownum+1);
+    for (rownum = 0; rownum < numrows; rownum++) {
+        printf("\rWorking on row %d", rownum + 1);
         fflush(stdout);
 
         // Loop over all the spectra per row
-        for (specnum = 0 ; specnum < spec_per_row ; specnum++) {
+        for (specnum = 0; specnum < spec_per_row; specnum++) {
             read_WAPP_lags(infiles, numfiles, cmd->numwapps, rawdata, &w);
-            WAPP_lags_to_spectra(cmd->numwapps, &w, rawdata, 
-                                 fspects + specnum * pf.hdr.nchan * pf.hdr.npol, 
+            WAPP_lags_to_spectra(cmd->numwapps, &w, rawdata,
+                                 fspects + specnum * pf.hdr.nchan * pf.hdr.npol,
                                  lags, fftplan);
         }
 
         // Loop over all the channels:
-        for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; ichan++){
+        for (ichan = 0; ichan < pf.hdr.nchan * pf.hdr.npol; ichan++) {
 
             // Populate datachunk[] by picking out all time samples for ichan
-            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
-                datachunk[itsamp] = 
+            for (itsamp = 0; itsamp < spec_per_row; itsamp++) {
+                datachunk[itsamp] =
                     fspects[ichan + itsamp * pf.hdr.nchan * pf.hdr.npol];
             }
-            
+
             // Compute the statistics here, and put the offsets and scales in
             // pf.sub.dat_offsets[] and pf.sub.dat_scales[]
-            
-            if (rescale(datachunk, spec_per_row, cmd->numbits, &offset, &scale)!=0){
+
+            if (rescale(datachunk, spec_per_row, cmd->numbits, &offset, &scale) != 0) {
                 printf("Rescale routine failed!\n");
-                return(-1);
+                return (-1);
             }
             pf.sub.dat_offsets[ichan] = offset;
             pf.sub.dat_scales[ichan] = scale;
-            
+
             // Since we have the offset and scale ready, rescale the data:
-            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
-                datum = (scale==0.0) ? 0.0 : \
+            for (itsamp = 0; itsamp < spec_per_row; itsamp++) {
+                datum = (scale == 0.0) ? 0.0 :
                     roundf((datachunk[itsamp] - offset) / scale);
-		// Check that it lies between 0 and (2^Nbits -1)
-		datum = (datum < 0) ? 0.0 : datum;
-		if (cmd->numbits==4) {
-		  datum = (datum > 15.0) ? 15.0 : datum;
-		} else if (cmd->numbits==8) {
-		  datum = (datum > 255.0) ? 255.0 : datum;
-		} else {
-		  printf("This can't be happening!\n");
-		}
+                // Check that it lies between 0 and (2^Nbits -1)
+                datum = (datum < 0) ? 0.0 : datum;
+                if (cmd->numbits == 4) {
+                    datum = (datum > 15.0) ? 15.0 : datum;
+                } else if (cmd->numbits == 8) {
+                    datum = (datum > 255.0) ? 255.0 : datum;
+                } else {
+                    printf("This can't be happening!\n");
+                }
                 fspects[ichan + itsamp * pf.hdr.nchan * pf.hdr.npol] = datum;
-            }	  
+            }
             // Now fspects[ichan] contains rescaled and clipped floats.
         }
 
         // Then do the conversion to 4-bits or 8-bits and store the
         // results in pf.sub.data[] 
-        if (cmd->numbits==4) {
-            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+        if (cmd->numbits == 4) {
+            for (itsamp = 0; itsamp < spec_per_row; itsamp++) {
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
-                for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
-                     ichan+=2, datidx+=2){
+                for (ichan = 0; ichan < pf.hdr.nchan * pf.hdr.npol;
+                     ichan += 2, datidx += 2) {
                     packdatum = fspects[datidx] * 16 + fspects[datidx + 1];
-                    pf.sub.data[datidx/2] = (unsigned char)packdatum;
+                    pf.sub.data[datidx / 2] = (unsigned char) packdatum;
                 }
             }
-        } else {  // cmd->numbits==8
-            for (itsamp = 0 ; itsamp < spec_per_row ; itsamp++){
+        } else {                // cmd->numbits==8
+            for (itsamp = 0; itsamp < spec_per_row; itsamp++) {
                 datidx = itsamp * pf.hdr.nchan * pf.hdr.npol;
-                for (ichan = 0 ; ichan < pf.hdr.nchan * pf.hdr.npol ; 
-                     ichan++, datidx++){
+                for (ichan = 0; ichan < pf.hdr.nchan * pf.hdr.npol;
+                     ichan++, datidx++) {
                     //if (fspects[datidx] > 256.0 || fspects[datidx] < 0.0) {
                     //    printf("Yikes!  %d  %d  %.7g\n", itsamp, ichan, fspects[datidx]);
                     //}
-                    pf.sub.data[datidx] = (unsigned char)fspects[datidx];
+                    pf.sub.data[datidx] = (unsigned char) fspects[datidx];
                 }
             }
         }
-	    
+
         // Now write the row...
-        pf.sub.offs = (pf.tot_rows+0.5) * pf.sub.tsubint;
+        pf.sub.offs = (pf.tot_rows + 0.5) * pf.sub.tsubint;
         status = psrfits_write_subint(&pf);
         if (status) {
             printf("\nError (%d) writing PSRFITS...\n\n", status);
@@ -178,10 +176,10 @@ int main(int argc, char *argv[])
         }
     }
     printf("\n");
-    
+
     // Close the PSRFITS file
     psrfits_close(&pf);
-    
+
     // Free the structure arrays too...
     free(datachunk);
     free(pf.sub.dat_freqs);
