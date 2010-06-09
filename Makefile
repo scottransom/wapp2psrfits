@@ -13,9 +13,13 @@ OTHERLINK = -L/usr/local/lib -lcfitsio -L$(PRESTO)/lib -lsla
 # Source directory
 SRCDIR = $(shell pwd)
 
+# git commit-hash
+GITHASH = $(shell git rev-parse HEAD)
+
 # Which C compiler
 CC = gcc
 CFLAGS = -I$(FFTWINCDIR) -DSRCDIR=\"$(SRCDIR)\"\
+	-DGITHASH=\"$(GITHASH)\"\
 	-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64\
 	-g -Wall -W
 #	-O3 -Wall -W

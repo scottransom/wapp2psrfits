@@ -41,6 +41,7 @@ int main(int argc, char *argv[])
 
     printf("\n           WAPP to PSRFITs Conversion Code\n");
     printf("            by S. Ransom & S. Chatterjee\n\n");
+    printf("Using code git hash:  '%s'\n\n", GITHASH);
 
     if (!(cmd->numbits == 4 || cmd->numbits == 8)) {
         printf("ERROR:  -b (# of output bits) must be 4 or 8!\n");
