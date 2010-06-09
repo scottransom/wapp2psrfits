@@ -7,7 +7,7 @@
 #define PSRFITS_MAXFILELEN_SEARCH 10L
 
 // The following is the template file to use to create a PSRFITS file.
-#define PSRFITS_SEARCH_TEMPLATE "WAPP_PSRFITS_v3.4_search_template.txt"
+#define PSRFITS_SEARCH_TEMPLATE "WAPP_PSRFITS_v4.3_search_template.txt"
 
 struct hdrinfo {
     char obs_mode[8];       // Observing mode (SEARCH, PSR, CAL)
