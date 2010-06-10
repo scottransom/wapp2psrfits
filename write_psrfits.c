@@ -76,9 +76,9 @@ int psrfits_create(struct psrfits *pf)
     pf->rownum = 1;
     hdr->offset_subint = pf->tot_rows;
 
-    // Update the filename - don't include filenum for fold mode
+    // Update the filename - don't include filenum if multifile=0
     // TODO : use rf/cf extensions for psr/cals?
-    if (mode == fold && pf->multifile != 1)
+    if (pf->multifile != 1)
         sprintf(pf->filename, "%s.fits", pf->basefilename);
     else
         sprintf(pf->filename, "%s_%04d.fits", pf->basefilename, pf->filenum);

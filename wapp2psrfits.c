@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
     int spec_per_row, specnum, status, move_size;
     float offset, scale, datum, packdatum;
     float *lags, *fspects, *datachunk;
-    long long N = 0;
+    long long N = 0, totsize;
     unsigned char *move, *rawdata;
     FILE **infiles;
     struct HEADERP *hdr;
@@ -92,8 +92,16 @@ int main(int argc, char *argv[])
     close_parse(hdr);
     spec_per_row = pf.hdr.nsblk;
     numrows = N / spec_per_row;
-    pf.rows_per_file = numrows; // NOTE: this will make a _single_ file!  FIXME!
-    printf("PSRFITS will have %d samples per row and %d rows.\n\n",
+    totsize = numrows * pf.sub.bytes_per_subint;
+    if (totsize / 1073741824.0 < cmd->outlenGB) {
+        pf.multifile = 0;
+        pf.rows_per_file = numrows;
+    } else {
+        pf.multifile = 1;
+        pf.rows_per_file = (int) ((cmd->outlenGB * 1073741824.0)
+                                  / (double) pf.sub.bytes_per_subint);
+    }
+    printf("PSRFITS file(s) will have %d samples per row and %d rows.\n\n",
            spec_per_row, numrows);
 
     // Create the arrays we will need
