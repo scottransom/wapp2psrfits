@@ -245,12 +245,12 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
         dtus = w->dt * 1.0e6;
         corr_rate = 1.0 / (dtus - WAPP_DEADTIME);
         w->corr_scale = corr_rate / w->BW;
-        /* Correction for narrow band use */
+        // Correction for narrow band use
         if (w->BW < 50.0)
             w->corr_scale = corr_rate / 50.0;
-        if (w->corr_level == 9) /* 9-level sampling */
+        if (w->corr_level == 9)     // 9-level sampling
             w->corr_scale /= 16.0;
-        if (get_hdr_int(h, "sum"))      /* summed IFs (search mode) */
+        if (get_hdr_int(h, "sum"))  // summed IFs (search mode)
             w->corr_scale /= 2.0;
         w->corr_scale *= pow(2.0, (double) get_hdr_int(h, "lagtrunc"));
     }
@@ -433,10 +433,8 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
     strcpy(pf->hdr.feed_mode, "FA");      // check this...
 
     pf->hdr.beamnum = 0;
-    if (get_hdr_int(h, "isalfa")) {
+    if (get_hdr_int(h, "isalfa"))
         pf->hdr.beamnum = w->beamnum;
-        // Should we correct positions and paralactic angles etc...?
-    }
 
     pf->hdr.dt = w->dt;
     pf->hdr.fctr = w->fctr + 0.5 * (numwapps - 1.0) * w->BW;
@@ -480,9 +478,10 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
              &pf->sub.glon, &pf->sub.glat);
     pf->sub.glon *= RADTODEG;
     pf->sub.glat *= RADTODEG;
-    pf->sub.feed_ang = 0.0;     // These are wrong too...
-    pf->sub.pos_ang = 0.0;      // These are wrong too...
-    pf->sub.par_ang = 0.0;      // These are wrong too...
+    // The following three are unknown or hard to get, I think (SMR)
+    pf->sub.feed_ang = 0.0;
+    pf->sub.pos_ang = 0.0;
+    pf->sub.par_ang = 0.0;
     pf->sub.bytes_per_subint = (pf->hdr.nbits * pf->hdr.nchan *
                                 pf->hdr.npol * pf->hdr.nsblk) / 8;
     pf->sub.FITS_typecode = TBYTE;      // 11 = byte
@@ -495,7 +494,7 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
         pf->sub.dat_weights[ii] = 1.0;
     }
 
-    // The following need to be adjusted for 4-bit data at least...
+    // The following are re-set to try to preserve the band shape later
     pf->sub.dat_offsets = gen_fvect(pf->hdr.nchan * pf->hdr.npol);
     pf->sub.dat_scales = gen_fvect(pf->hdr.nchan * pf->hdr.npol);
     for (ii = 0; ii < pf->hdr.nchan * pf->hdr.npol; ii++) {
