@@ -26,7 +26,7 @@ CFLAGS = -I$(FFTWINCDIR) -DSRCDIR=\"$(SRCDIR)\"\
 CLINKFLAGS = $(CFLAGS)
 
 # When modifying the CLIG files, the is the location of the clig binary
-CLIG = /usr/local/bin/clig
+CLIG = clig
 # Rules for CLIG generated files
 %_cmd.c : %_cmd.cli
 	$(CLIG) -o $*_cmd -d $<
