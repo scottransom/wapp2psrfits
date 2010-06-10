@@ -21,8 +21,8 @@ CC = gcc
 CFLAGS = -I$(FFTWINCDIR) -DSRCDIR=\"$(SRCDIR)\"\
 	-DGITHASH=\"$(GITHASH)\"\
 	-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64\
-	-g -Wall -W
-#	-O3 -Wall -W
+	-O3 -Wall -W
+#	-g -Wall -W
 CLINKFLAGS = $(CFLAGS)
 
 # When modifying the CLIG files, the is the location of the clig binary
