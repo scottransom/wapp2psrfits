@@ -105,10 +105,12 @@ int psrfits_create(struct psrfits *pf)
     fits_get_system_time(ctmp, &itmp, status);
     // Note:  this is the date the file was _written_, not the obs start date
     fits_update_key(pf->fptr, TSTRING, "DATE", ctmp, NULL, status);
+    fits_update_key(pf->fptr, TSTRING, "GITHASH", GITHASH, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "TELESCOP", hdr->telescope, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "OBSERVER", hdr->observer, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "PROJID", hdr->project_id, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "FRONTEND", hdr->frontend, NULL, status);
+    fits_update_key(pf->fptr, TINT, "IBEAM", &(hdr->beamnum), NULL, status);
     fits_update_key(pf->fptr, TSTRING, "BACKEND", hdr->backend, NULL, status);
     if (hdr->onlyI || hdr->summed_polns) {
         if (!hdr->onlyI && hdr->npol > 1) {
@@ -221,11 +223,11 @@ int psrfits_create(struct psrfits *pf)
             out_npol = 1;
         int out_nsblk = hdr->nsblk / hdr->ds_time_fact;
 
-        fits_modify_vector_len(pf->fptr, 13, out_nchan, status);        // DAT_FREQ
-        fits_modify_vector_len(pf->fptr, 14, out_nchan, status);        // DAT_WTS
+        fits_modify_vector_len(pf->fptr, 13, out_nchan, status);  // DAT_FREQ
+        fits_modify_vector_len(pf->fptr, 14, out_nchan, status);  // DAT_WTS
         itmp = out_nchan * out_npol;
-        fits_modify_vector_len(pf->fptr, 15, itmp, status);     // DAT_OFFS
-        fits_modify_vector_len(pf->fptr, 16, itmp, status);     // DAT_SCL
+        fits_modify_vector_len(pf->fptr, 15, itmp, status);       // DAT_OFFS
+        fits_modify_vector_len(pf->fptr, 16, itmp, status);       // DAT_SCL
 
         if (mode == search)
             itmp = (hdr->nbits * out_nchan * out_npol * out_nsblk) / 8;

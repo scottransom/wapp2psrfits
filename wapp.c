@@ -446,13 +446,13 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
         strcpy(pf->hdr.poln_order, "AA");
         pf->hdr.summed_polns = 0;
     }
-    strcpy(pf->hdr.track_mode, "TRACK");        // Potentially not-true?
-    strcpy(pf->hdr.cal_mode, "OFF");    // Potentially not-true?
-    strcpy(pf->hdr.feed_mode, "FA");    // check this...
+    strcpy(pf->hdr.track_mode, "TRACK");  // Potentially not-true?
+    strcpy(pf->hdr.cal_mode, "OFF");      // Potentially not-true?
+    strcpy(pf->hdr.feed_mode, "FA");      // check this...
 
+    pf->hdr.beamnum = 0;
     if (get_hdr_int(h, "isalfa")) {
-
-
+        pf->hdr.beamnum = w->beamnum;
         // TODO:
         //   Need to set the beam number here...
         //   Also should correct positions and paralactic angles etc...

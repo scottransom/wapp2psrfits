@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
     // (size is usually 1 sec / 64 microsec = 15625)
 
     // Create the FFTW plan
+    // See:  http://www.cv.nrao.edu/~pdemores/wapp/
     lags = (float *) fftwf_malloc((w.numchans + 1) * sizeof(float));
     fftplan = fftwf_plan_r2r_1d(w.numchans + 1, lags,
                                 lags, FFTW_REDFT00, FFTW_PATIENT);
