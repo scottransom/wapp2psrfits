@@ -59,7 +59,9 @@ int main(int argc, char *argv[])
 
     // Get the basic information from them
     N = get_WAPP_info(cmd->argv[ii], infiles, numfiles, cmd->numwapps, &hdr, &w);
-    printf("Found a total of %lld samples.\n", N);
+    // Print a summary...
+    print_WAPP_hdr(hdr);
+    printf("\nFound a total of %lld samples.\n", N);
 
     // Write a copy of the first(!) original WAPP header
     {
@@ -77,7 +79,7 @@ int main(int argc, char *argv[])
         chkfileseek(infiles[0], posn, 1, SEEK_SET);
         // Determine the output WAPP header file name
         sprintf(hdrname, "%s.wapp_hdr", cmd->outfile);
-        printf("\nCopying the header from the first WAPP file to '%s'\n", hdrname);
+        printf("Copying the header from the first WAPP file to '%s'\n", hdrname);
         // Open, write the header, and close the header file
         hdrfile = chkfopen(hdrname, "wb");
         chkfwrite(hdr, w.header_size, 1, hdrfile);
@@ -91,7 +93,7 @@ int main(int argc, char *argv[])
     spec_per_row = pf.hdr.nsblk;
     numrows = N / spec_per_row;
     pf.rows_per_file = numrows; // NOTE: this will make a _single_ file!  FIXME!
-    printf("PSRFITS will have %d samples per row and %d rows.\n",
+    printf("PSRFITS will have %d samples per row and %d rows.\n\n",
            spec_per_row, numrows);
 
     // Create the arrays we will need
@@ -109,9 +111,9 @@ int main(int argc, char *argv[])
 
     // Create the FFTW plan
     // See:  http://www.cv.nrao.edu/~pdemores/wapp/
-    lags = (float *) fftwf_malloc((w.numchans + 1) * sizeof(float));
-    fftplan = fftwf_plan_r2r_1d(w.numchans + 1, lags,
-                                lags, FFTW_REDFT00, FFTW_PATIENT);
+    lags = (float *) fftwf_malloc((w.numchans) * sizeof(float));
+    fftplan = fftwf_plan_r2r_1d(w.numchans, lags,
+                                lags, FFTW_REDFT01, FFTW_PATIENT);
 
     // Create the PSRFITS file
     strcpy(pf.basefilename, cmd->outfile);

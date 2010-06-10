@@ -42,3 +42,4 @@ void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w,
                           void *rawdata, float *spectra, float *lags, 
                           fftwf_plan fftplan);
 
+void print_WAPP_hdr(struct HEADERP *hdr);

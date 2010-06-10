@@ -211,12 +211,12 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     if (get_hdr_int(h, "freqinversion")) {
         w->invertband = (w->invertband == 1 ? 0 : 1);
     }
-    if (get_hdr_int(h, "iflo_flip")) {
-        w->invertband = (w->invertband == 1 ? 0 : 1);
+    // These two parameters are cumulative...
+    if (w->header_version >= 7) {
+        if (get_hdr_int(h, "iflo_flip")) {
+            w->invertband = (w->invertband == 1 ? 0 : 1);
+        }
     }
-    printf("freqinversion = %d   iflo_flip = %d : using w->invertband = %d\n",
-           get_hdr_int(h, "freqinversion"),
-           get_hdr_int(h, "iflo_flip"), w->invertband);
 
     // Sampling time in sec
     w->dt = get_hdr_double(h, "wapp_time") / 1.0e6;
@@ -231,8 +231,11 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     w->df = fabs(w->BW / w->numchans);
 
     // Center freq of the lowest freq channel
-    // TODO:  need to correct for 1/2 channel offset
-    //        I think it is -0.5*w-df for upper sideband...  SMR
+    // See:  http://www.cv.nrao.edu/~pdemores/wapp/
+    // Note:  If band is inverted, since we reorder the channels
+    //        explicitly, we don't need to use the negative "B"
+    //        factor from Paul's webpage above.  And the following
+    //        is correct for USB or LSB data.
     w->lofreq = w->fctr - 0.5 * w->BW + 0.5 * w->df;
 
     // Correlator scaling
@@ -282,27 +285,6 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
         cptr2 = get_hdr_string(h, "start_time", &len);
         w->MJD_epoch = UT_strings_to_MJD(cptr1, cptr2, w->date_obs);
     }
-
-
-#if 1
-    printf("header_version = %d\n", w->header_version);
-    printf("header_size = %d\n", w->header_size);
-    printf("numchans = %d\n", w->numchans);
-    printf("numifs = %d\n", w->numifs);
-    printf("bits_per_lag = %d\n", w->bits_per_lag);
-    printf("corr_level = %d\n", w->corr_level);
-    printf("invertband = %d\n", w->invertband);
-    printf("dt = %.10g\n", w->dt);
-    printf("BW = %.10g\n", w->BW);
-    printf("fctr = %.10g\n", w->fctr);
-    printf("df = %.10g\n", w->df);
-    printf("lofreq = %.10g\n", w->lofreq);
-    printf("corr_scale = %.10g\n", w->corr_scale);
-    printf("ra = %.10g\n", w->ra);
-    printf("dec = %.10g\n", w->dec);
-    printf("MJD_epoch = %20.15Lf\n", w->MJD_epoch);
-    printf("date_obs = '%s'\n", w->date_obs);
-#endif
 }
 
 
@@ -453,9 +435,7 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
     pf->hdr.beamnum = 0;
     if (get_hdr_int(h, "isalfa")) {
         pf->hdr.beamnum = w->beamnum;
-        // TODO:
-        //   Need to set the beam number here...
-        //   Also should correct positions and paralactic angles etc...
+        // Should we correct positions and paralactic angles etc...?
     }
 
     pf->hdr.dt = w->dt;
@@ -619,6 +599,57 @@ int read_WAPP_lags(FILE * infiles[], int numfiles, int numwapps,
     }
 }
 
+void print_WAPP_hdr(struct HEADERP *hdr)
+/* Output a WAPP header in human readable form */
+{
+    int len, vers, inverted = 0;
+    char datetime[100];
+
+    vers = get_hdr_int(hdr, "header_version");
+    printf("\n             Header version = %d\n", vers);
+    printf("        Header size (bytes) = %d\n", hdr->headlen + hdr->offset);
+    printf("                Source Name = %s\n", get_hdr_string(hdr, "src_name", &len));
+    printf("           Observation Type = %s\n", get_hdr_string(hdr, "obs_type", &len));
+    printf(" Observation Date (YYYMMDD) = %s\n", get_hdr_string(hdr, "obs_date", &len));
+    printf("    Obs Start UT (HH:MM:SS) = %s\n", get_hdr_string(hdr, "start_time", &len));
+    printf("             MJD start time = %.12Lf\n",
+           UT_strings_to_MJD(get_hdr_string(hdr, "obs_date", &len),
+                             get_hdr_string(hdr, "start_time", &len),
+                             datetime));
+    printf("                 Project ID = %s\n", get_hdr_string(hdr, "project_id", &len));
+    printf("                  Observers = %s\n", get_hdr_string(hdr, "observers", &len));
+    printf("                Scan Number = %d\n", get_hdr_int(hdr, "scan_number"));
+    printf("    RA (J2000, HHMMSS.SSSS) = %.4f\n", get_hdr_double(hdr, "src_ra"));
+    printf("   DEC (J2000, DDMMSS.SSSS) = %.4f\n", get_hdr_double(hdr, "src_dec"));
+    printf("        Start Azimuth (deg) = %-17.15g\n", get_hdr_double(hdr, "start_az"));
+    printf("     Start Zenith Ang (deg) = %-17.15g\n", get_hdr_double(hdr, "start_za"));
+    printf("            Start AST (sec) = %-17.15g\n", get_hdr_double(hdr, "start_ast"));
+    printf("            Start LST (sec) = %-17.15g\n", get_hdr_double(hdr, "start_lst"));
+    printf("           Obs Length (sec) = %-17.15g\n", get_hdr_double(hdr, "obs_time"));
+    printf("      Requested T_samp (us) = %-17.15g\n", get_hdr_double(hdr, "samp_time"));
+    printf("         Actual T_samp (us) = %-17.15g\n", get_hdr_double(hdr, "wapp_time"));
+    printf("         Central freq (MHz) = %-17.15g\n", get_hdr_double(hdr, "cent_freq"));
+    printf("      Total Bandwidth (MHz) = %-17.15g\n", get_hdr_double(hdr, "bandwidth"));
+    printf("             Number of lags = %d\n", get_hdr_int(hdr, "num_lags"));
+    printf("              Number of IFs = %d\n", get_hdr_int(hdr, "nifs"));
+    printf("    Samples since obs start = %lld\n", get_hdr_longlong(hdr, "timeoff"));
+    printf("   Other information:\n");
+    if (get_hdr_int(hdr, "sum") == 1) printf("      IFs are summed.\n");
+    if (get_hdr_int(hdr, "freqinversion")) {
+        inverted = (inverted == 1 ? 0 : 1);
+    }
+    if (vers >= 7) {
+        if (get_hdr_int(hdr, "iflo_flip")) {
+            inverted = (inverted == 1 ? 0 : 1);
+        }
+    }
+    if (inverted) printf("      Frequency band is inverted.\n");
+    if (get_hdr_int(hdr, "lagformat") == 0)
+        printf("      Lags are 16 bit integers.\n");
+    else
+        printf("      Lags are 32 bit integers.\n");
+}
+
 
 void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w,
                           void *rawdata, float *spectra, float *lags,
@@ -662,7 +693,6 @@ void WAPP_lags_to_spectra(int numwapps, struct wappinfo *w,
                 lags[ii] *= power;
 
             // FFT the ACF lags (which are real and even) -> real and even FFT
-            lags[w->numchans] = 0.0;
             fftwf_execute(fftplan);
 
 #if 0
