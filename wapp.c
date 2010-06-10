@@ -209,12 +209,12 @@ static void set_wappinfo(struct HEADERP *h, struct wappinfo *w)
     // Is the band inverted?  (i.e. lower sideband)
     w->invertband = 0;
     if (get_hdr_int(h, "freqinversion")) {
-        w->invertband = (w->invertband == 1 ? 0 : 1);
+        w->invertband = (w->invertband == 1) ? 0 : 1;
     }
     // These two parameters are cumulative...
     if (w->header_version >= 7) {
         if (get_hdr_int(h, "iflo_flip")) {
-            w->invertband = (w->invertband == 1 ? 0 : 1);
+            w->invertband = (w->invertband == 1) ? 0 : 1;
         }
     }
 
@@ -635,11 +635,11 @@ void print_WAPP_hdr(struct HEADERP *hdr)
     printf("   Other information:\n");
     if (get_hdr_int(hdr, "sum") == 1) printf("      IFs are summed.\n");
     if (get_hdr_int(hdr, "freqinversion")) {
-        inverted = (inverted == 1 ? 0 : 1);
+        inverted = (inverted == 1) ? 0 : 1;
     }
     if (vers >= 7) {
         if (get_hdr_int(hdr, "iflo_flip")) {
-            inverted = (inverted == 1 ? 0 : 1);
+            inverted = (inverted == 1) ? 0 : 1;
         }
     }
     if (inverted) printf("      Frequency band is inverted.\n");

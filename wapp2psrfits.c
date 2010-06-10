@@ -62,6 +62,11 @@ int main(int argc, char *argv[])
     // Print a summary...
     print_WAPP_hdr(hdr);
     printf("\nFound a total of %lld samples.\n", N);
+    // Are we explicitly flipping the band?
+    if (cmd->invertP) {
+        printf("\nForcing a flip of the band since '-i' is specified.\n");
+        w.invertband = (w.invertband == 1) ? 0 : 1;
+    }
 
     // Write a copy of the first(!) original WAPP header
     {
