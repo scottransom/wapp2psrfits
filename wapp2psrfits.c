@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
     }
 
     // Get the basic information from them
-    N = get_WAPP_info(cmd->argv[ii], infiles, numfiles, cmd->numwapps, &hdr, &w);
+    N = get_WAPP_info(cmd->argv[0], infiles, numfiles, cmd->numwapps, &hdr, &w);
     // Print a summary...
     print_WAPP_hdr(hdr);
     printf("\nFound a total of %lld samples.\n", N);
