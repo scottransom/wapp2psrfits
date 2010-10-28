@@ -108,6 +108,8 @@ int psrfits_create(struct psrfits *pf)
     fits_update_key(pf->fptr, TSTRING, "GITHASH", GITHASH, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "TELESCOP", hdr->telescope, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "OBSERVER", hdr->observer, NULL, status);
+    fits_update_key(pf->fptr, TINT, "SCAN_NUM", &(hdr->scan_number), 
+                    "Scan number", status);
     fits_update_key(pf->fptr, TSTRING, "PROJID", hdr->project_id, NULL, status);
     fits_update_key(pf->fptr, TSTRING, "FRONTEND", hdr->frontend, NULL, status);
     fits_update_key(pf->fptr, TINT, "IBEAM", &(hdr->beamnum), NULL, status);
@@ -164,11 +166,13 @@ int psrfits_create(struct psrfits *pf)
     fits_update_key(pf->fptr, TDOUBLE, "SCANLEN", &(hdr->scanlen), NULL, status);
     itmp = (int) hdr->MJD_epoch;
     fits_update_key(pf->fptr, TINT, "STT_IMJD", &itmp, NULL, status);
-    ldtmp = (hdr->MJD_epoch - (long double) itmp) * 86400.0L;   // in sec
+    ldtmp = (hdr->MJD_epoch - (long double) itmp) * 86400.0L + 1e-10L;   // in sec
     itmp = (int) ldtmp;
     fits_update_key(pf->fptr, TINT, "STT_SMJD", &itmp, NULL, status);
     ldtmp -= (long double) itmp;
     dtmp = (double) ldtmp;
+    if (fabs(dtmp) < 1e-9)  // Don't believe values smaller than 1ns
+        dtmp = 0.0;
     fits_update_key(pf->fptr, TDOUBLE, "STT_OFFS", &dtmp, NULL, status);
     fits_update_key(pf->fptr, TDOUBLE, "STT_LST", &(hdr->start_lst), NULL, status);
 

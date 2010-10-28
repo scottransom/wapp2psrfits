@@ -147,7 +147,7 @@ static long double UT_strings_to_MJD(char *obs_date, char *start_time,
     sprintf(date_obs, "%04d-%02d-%02dT%02d:%02d:%06.3f",
             year, month, day, hour, min, (double) sec);
     slaCaldj(year, month, day, &dMJD, &err);
-    LMJD = dMJD + (hour + (min + (sec / 60.0)) / 60.0) / 24.0;
+    LMJD = dMJD + (hour + (min + (sec / 60.0L)) / 60.0L) / 24.0L;
     return LMJD;
 }
 
@@ -470,6 +470,7 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
     pf->sub.tel_az = get_hdr_double(h, "start_az");
     pf->sub.tel_zen = get_hdr_double(h, "start_za");
     pf->sub.lst = get_hdr_double(h, "start_lst");
+    pf->hdr.start_lst = pf->sub.lst;
     pf->sub.tsubint = pf->hdr.nsblk * pf->hdr.dt;
     pf->sub.ra = pf->hdr.ra2000;
     pf->sub.dec = pf->hdr.dec2000;
