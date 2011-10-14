@@ -46,7 +46,8 @@ char *get_hdr_string(struct HEADERP *h, char *name, int *slen)
 
     if (find_hdrval(h, name, &val)) {
         printf("ERROR:  Can't find '%s' in the WAPP header!\n", name);
-        exit(0);
+        //exit(0);
+	return cptr;
     }
     cptr = (char *) val.value;
     // Is the following + 1 really correct?  I think it causes it
@@ -410,7 +411,10 @@ void fill_psrfits_struct(int numwapps, int numbits, struct HEADERP *h,
     }
     strcpy(pf->hdr.backend, "WAPP");
     cptr = get_hdr_string(h, "frontend", &slen);
-    strncpy(pf->hdr.frontend, cptr, slen);
+    if(cptr != NULL)
+      strncpy(pf->hdr.frontend, cptr, slen);
+    else
+      strncpy(pf->hdr.frontend, "alfa", 4);
     cptr = get_hdr_string(h, "observers", &slen);
     strncpy(pf->hdr.observer, cptr, slen);
     cptr = get_hdr_string(h, "project_id", &slen);
